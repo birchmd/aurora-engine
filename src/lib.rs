@@ -243,6 +243,15 @@ mod contract {
             .sdk_process();
     }
 
+    #[no_mangle]
+    pub extern "C" fn block_height() {
+        let input = sdk::read_input();
+        let height_str = alloc::str::from_utf8(&input).unwrap();
+        let block_height: u64 = height_str.parse().unwrap();
+        let result = sdk::block_hash(block_height);
+        sdk::return_output(result.as_bytes());
+    }
+
     #[cfg(feature = "testnet")]
     #[no_mangle]
     pub extern "C" fn make_it_rain() {

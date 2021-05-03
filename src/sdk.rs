@@ -24,6 +24,7 @@ mod exports {
         pub(crate) fn block_timestamp() -> u64;
         fn epoch_height() -> u64;
         pub(crate) fn storage_usage() -> u64;
+        pub(crate) fn block_hash(block_height: u64, register_id: u64);
         // #################
         // # Economics API #
         // #################
@@ -283,6 +284,15 @@ pub fn predecessor_account_id() -> Vec<u8> {
 pub fn sha256(input: &[u8]) -> H256 {
     unsafe {
         exports::sha256(input.len() as u64, input.as_ptr() as u64, 1);
+        let bytes = H256::zero();
+        exports::read_register(1, bytes.0.as_ptr() as *const u64 as u64);
+        bytes
+    }
+}
+
+pub fn block_hash(block_height: u64) -> H256 {
+    unsafe {
+        exports::block_hash(block_height, 1);
         let bytes = H256::zero();
         exports::read_register(1, bytes.0.as_ptr() as *const u64 as u64);
         bytes
