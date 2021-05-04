@@ -61,13 +61,33 @@ rjson = { version = "0.3.1", default-features = false }
 bstr = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Need to set all these actix dependencies to make the nearcore stuff compile
+actix = "=0.11.0-beta.2"
+actix-codec = "=0.4.0-beta.1"
+actix-cors = "=0.5.4"
+actix-http = "=3.0.0-beta.3"
+actix-macros = "=0.2.0"
+actix-router = "=0.2.7"
+actix-rt = "=2.1.0"
+actix-server = "=2.0.0-beta.3"
+actix-service = "=2.0.0-beta.4"
+actix-tls = "=3.0.0-beta.3"
+actix-utils = "=3.0.0-beta.2"
+actix-web = "=4.0.0-beta.3"
+actix-web-codegen = "=0.5.0-beta.1"
+actix_derive = "=0.6.0-beta.1"
+
 hex = { version = "0.4.3", default-features = false }
 near-sdk = { git = "https://github.com/near/near-sdk-rs", rev = "9d99077c6acfde68c06845f2a1eb2b5ed7983401" }
 near-sdk-sim = { git = "https://github.com/near/near-sdk-rs", rev = "9d99077c6acfde68c06845f2a1eb2b5ed7983401" }
-near-crypto = "0.1.0"
+near-crypto = { git = "https://github.com/near/nearcore", rev = "3744f07e13bf43a9522fb39fa8f6f128396d0e1f" }
 near-vm-runner = { git = "https://github.com/near/nearcore", rev = "3744f07e13bf43a9522fb39fa8f6f128396d0e1f" }
 near-primitives-core = { git = "https://github.com/near/nearcore", rev = "3744f07e13bf43a9522fb39fa8f6f128396d0e1f" }
 near-vm-logic = { git = "https://github.com/near/nearcore", rev = "3744f07e13bf43a9522fb39fa8f6f128396d0e1f" }
+near-primitives = { git = "https://github.com/near/nearcore", rev = "3744f07e13bf43a9522fb39fa8f6f128396d0e1f" }
+near-jsonrpc-primitives = { git = "https://github.com/near/nearcore", rev = "3744f07e13bf43a9522fb39fa8f6f128396d0e1f" }
+near-jsonrpc-client = { git = "https://github.com/near/nearcore", rev = "3744f07e13bf43a9522fb39fa8f6f128396d0e1f" }
 libsecp256k1 = "0.3.5"
 rand = "0.7.3"
 criterion = "0.3.4"
