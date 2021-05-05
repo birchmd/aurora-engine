@@ -24,7 +24,7 @@ mod exports {
         pub(crate) fn block_timestamp() -> u64;
         fn epoch_height() -> u64;
         pub(crate) fn storage_usage() -> u64;
-        pub(crate) fn block_hash(block_height: u64, register_id: u64);
+        pub(crate) fn block_hash(block_height: u64, register_id: u64) -> bool;
         // #################
         // # Economics API #
         // #################
@@ -290,12 +290,15 @@ pub fn sha256(input: &[u8]) -> H256 {
     }
 }
 
-pub fn block_hash(block_height: u64) -> H256 {
+pub fn block_hash(block_height: u64) -> Option<H256> {
     unsafe {
-        exports::block_hash(block_height, 1);
-        let bytes = H256::zero();
-        exports::read_register(1, bytes.0.as_ptr() as *const u64 as u64);
-        bytes
+        if exports::block_hash(block_height, 1) {
+            let bytes = H256::zero();
+            exports::read_register(1, bytes.0.as_ptr() as *const u64 as u64);
+            Some(bytes)
+        } else {
+            None
+        }
     }
 }
 

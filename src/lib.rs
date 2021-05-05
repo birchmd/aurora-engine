@@ -249,7 +249,7 @@ mod contract {
         let height_str = alloc::str::from_utf8(&input).unwrap();
         let block_height: u64 = height_str.parse().unwrap();
         let result = sdk::block_hash(block_height);
-        sdk::return_output(result.as_bytes());
+        sdk::return_output(result.unwrap_or_default().as_bytes());
     }
 
     #[cfg(feature = "testnet")]
