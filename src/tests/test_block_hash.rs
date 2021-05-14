@@ -22,11 +22,16 @@ fn test_testnet() {
         let json_key: JsonKey = serde_json::from_reader(reader).unwrap();
         let near_signing_key = SigningKey::parse_key(&json_key.account_id, &json_key.private_key);
         let eth_signing_key = secp256k1::SecretKey::parse_slice(&hex::decode("7d640019603753a2449e6b57201ea1e7ee642b287cba417e8e9ba253c7cfa442").unwrap()).unwrap();
+        let signing_address = crate::test_utils::address_from_secret_key(&eth_signing_key);
+        let dest_address = Address::from_slice(&hex::decode("Cc5A584F545B2Ca3EbaCc1346556d1f5B82B8fC6").unwrap());
 
         //deploy_erc20(&client, &near_signing_key, &eth_signing_key).await;
         //mint_erc20(&client, &near_signing_key, &eth_signing_key).await;
-        println!("{:?}", crate::test_utils::address_from_secret_key(&eth_signing_key));
-        println!("{:?}", near_signing_key);
+        transfer_erc20(&client, &near_signing_key, &eth_signing_key, 1_000, dest_address).await;
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        println!("{:?}", get_erc20_balance(&client, &near_signing_key, &eth_signing_key, signing_address).await);
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        println!("{:?}", get_erc20_balance(&client, &near_signing_key, &eth_signing_key, dest_address).await);
     });
 }
 
@@ -49,11 +54,7 @@ async fn deploy_erc20(client: &JsonRpcClient, near_signing_key: &SigningKey, eth
 async fn mint_erc20(client: &JsonRpcClient, near_signing_key: &SigningKey, eth_signing_key: &secp256k1::SecretKey) {
     let (block_hash, _, nonce) = latest_block_and_nonce(client, near_signing_key).await;
 
-    let constructor = crate::test_utils::erc20::ERC20Constructor::load();
-    let contract = crate::test_utils::erc20::ERC20(crate::test_utils::solidity::DeployedContract {
-        abi: constructor.0.abi,
-        address: Address::from_slice(&hex::decode("196c016bf03bbcbed2c0082ded8315bddc89f59a").unwrap()),
-    });
+    let contract = create_erc20_contract();
     let address = crate::test_utils::address_from_secret_key(&eth_signing_key);
     let mint_tx = contract.mint(address, 1000000000000000u64.into(), 1.into());
     let signed_eth_tx = crate::test_utils::sign_transaction(mint_tx, Some(1313161555), eth_signing_key);
@@ -65,6 +66,48 @@ async fn mint_erc20(client: &JsonRpcClient, near_signing_key: &SigningKey, eth_s
 
     println!("{:?}", submit_result);
     println!("{:?}", hex::encode(submit_result.result));
+}
+
+async fn transfer_erc20(client: &JsonRpcClient, near_signing_key: &SigningKey, eth_signing_key: &secp256k1::SecretKey, amount: u64, dest_address: Address) {
+    let (block_hash, _, near_nonce) = latest_block_and_nonce(client, near_signing_key).await;
+
+    let contract = create_erc20_contract();
+    let signing_address = crate::test_utils::address_from_secret_key(eth_signing_key);
+    let eth_nonce = call_aurora_view_fn(client, "get_nonce", signing_address).await;
+    let transfer_tx = contract.transfer(dest_address, amount.into(), eth_nonce);
+    let signed_eth_tx = crate::test_utils::sign_transaction(transfer_tx, Some(1313161555), eth_signing_key);
+    let near_tx = create_submit_tx(signed_eth_tx, block_hash, near_nonce, near_signing_key);
+
+    let outcome = send_tx(near_tx, client, near_signing_key).await;
+    let return_value = get_return_value(&outcome);
+    let submit_result = crate::parameters::SubmitResult::try_from_slice(&return_value).unwrap();
+
+    println!("{:?}", submit_result);
+    println!("{:?}", hex::encode(submit_result.result));
+}
+
+async fn get_erc20_balance(client: &JsonRpcClient, near_signing_key: &SigningKey, eth_signing_key: &secp256k1::SecretKey, address: Address) -> crate::prelude::U256 {
+    let (block_hash, _, near_nonce) = latest_block_and_nonce(client, near_signing_key).await;
+    let signing_address = crate::test_utils::address_from_secret_key(eth_signing_key);
+    let eth_nonce = call_aurora_view_fn(client, "get_nonce", signing_address).await;
+    let contract = create_erc20_contract();
+    let balance_tx = contract.balance_of(address, eth_nonce);
+    let signed_eth_tx = crate::test_utils::sign_transaction(balance_tx, Some(1313161555), eth_signing_key);
+    let near_tx = create_submit_tx(signed_eth_tx, block_hash, near_nonce, near_signing_key);
+
+    let outcome = send_tx(near_tx, client, near_signing_key).await;
+    let return_value = get_return_value(&outcome);
+    let submit_result = crate::parameters::SubmitResult::try_from_slice(&return_value).unwrap();
+
+    crate::prelude::U256::from_big_endian(&submit_result.result)
+}
+
+fn create_erc20_contract() -> crate::test_utils::erc20::ERC20 {
+    let constructor = crate::test_utils::erc20::ERC20Constructor::load();
+    crate::test_utils::erc20::ERC20(crate::test_utils::solidity::DeployedContract {
+        abi: constructor.0.abi,
+        address: Address::from_slice(&hex::decode("196c016bf03bbcbed2c0082ded8315bddc89f59a").unwrap()),
+    })
 }
 
 fn get_return_value(outcome: &FinalExecutionOutcomeView) -> Vec<u8> {
@@ -99,6 +142,26 @@ fn create_submit_tx(
 
 fn create_testnet_client() -> JsonRpcClient {
     near_jsonrpc_client::new_client("http://rpc.testnet.near.org")
+}
+
+async fn call_aurora_view_fn(client: &JsonRpcClient, method_name: &str, address: Address) -> crate::prelude::U256 {
+    let response = client.query(RpcQueryRequest {
+        block_reference: near_primitives::types::Finality::Final.into(),
+        request: near_primitives::views::QueryRequest::CallFunction {
+            account_id: "aurora".to_string(),
+            method_name: method_name.to_string(),
+            args: address.as_bytes().to_vec().into()
+        }
+    }).await.unwrap();
+
+    let bytes = match response.kind {
+        QueryResponseKind::CallResult(result) => {
+            result.result
+        }
+        _ => panic!("Didn't get call result"),
+    };
+
+    crate::prelude::U256::from_big_endian(&bytes)
 }
 
 async fn latest_block_and_nonce(
