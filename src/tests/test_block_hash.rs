@@ -26,8 +26,10 @@ fn test_testnet() {
         let dest_address = Address::from_slice(&hex::decode("Cc5A584F545B2Ca3EbaCc1346556d1f5B82B8fC6").unwrap());
 
         //deploy_erc20(&client, &near_signing_key, &eth_signing_key).await;
-        //mint_erc20(&client, &near_signing_key, &eth_signing_key).await;
-        transfer_erc20(&client, &near_signing_key, &eth_signing_key, 1_000, dest_address).await;
+        mint_erc20(&client, &near_signing_key, &eth_signing_key).await;
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        let transfer_amount = 5u64 * 10u64.pow(18);
+        transfer_erc20(&client, &near_signing_key, &eth_signing_key, transfer_amount, dest_address).await;
         std::thread::sleep(std::time::Duration::from_secs(5));
         println!("{:?}", get_erc20_balance(&client, &near_signing_key, &eth_signing_key, signing_address).await);
         std::thread::sleep(std::time::Duration::from_secs(5));
@@ -56,7 +58,9 @@ async fn mint_erc20(client: &JsonRpcClient, near_signing_key: &SigningKey, eth_s
 
     let contract = create_erc20_contract();
     let address = crate::test_utils::address_from_secret_key(&eth_signing_key);
-    let mint_tx = contract.mint(address, 1000000000000000u64.into(), 1.into());
+    let eth_nonce = call_aurora_view_fn(client, "get_nonce", address).await;
+    let amount = 10u64 * 10u64.pow(18);
+    let mint_tx = contract.mint(address, amount.into(), eth_nonce);
     let signed_eth_tx = crate::test_utils::sign_transaction(mint_tx, Some(1313161555), eth_signing_key);
     let near_tx = create_submit_tx(signed_eth_tx, block_hash, nonce, near_signing_key);
 
