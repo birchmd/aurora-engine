@@ -34,7 +34,6 @@ mod log_entry;
 mod precompiles;
 #[cfg(feature = "engine")]
 mod prover;
-#[cfg(feature = "engine")]
 pub mod sdk;
 
 #[cfg(test)]
