@@ -96,7 +96,6 @@ pub struct StorageBalanceBounds {
 }
 
 /// promise results structure
-#[cfg(feature = "engine")]
 pub enum PromiseResult {
     NotReady,
     Successful(Vec<u8>),

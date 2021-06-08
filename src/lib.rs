@@ -536,8 +536,8 @@ mod contract {
     fn internal_get_upgrade_index() -> u64 {
         match sdk::read_u64(&bytes_to_key(KeyPrefix::Config, CODE_STAGE_KEY)) {
             Ok(index) => index,
-            Err(sdk::ReadU64Error::InvalidU64) => sdk::panic_utf8(b"ERR_INVALID_UPGRADE"),
-            Err(sdk::ReadU64Error::MissingValue) => sdk::panic_utf8(b"ERR_NO_UPGRADE"),
+            Err(sdk::errors::ReadU64Error::InvalidU64) => sdk::panic_utf8(b"ERR_INVALID_UPGRADE"),
+            Err(sdk::errors::ReadU64Error::MissingValue) => sdk::panic_utf8(b"ERR_NO_UPGRADE"),
         }
     }
 

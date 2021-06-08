@@ -1,3 +1,4 @@
+use super::errors;
 use crate::prelude::{vec, Vec, H256};
 use crate::types::PromiseResult;
 use crate::types::STORAGE_PRICE_PER_BYTE;
@@ -169,12 +170,12 @@ pub fn read_input() -> Vec<u8> {
     }
 }
 
-pub(crate) fn read_input_borsh<T: BorshDeserialize>() -> Result<T, ArgParseErr> {
+pub(crate) fn read_input_borsh<T: BorshDeserialize>() -> Result<T, errors::ArgParseErr> {
     let bytes = read_input();
-    T::try_from_slice(&bytes).map_err(|_| ArgParseErr)
+    T::try_from_slice(&bytes).map_err(|_| errors::ArgParseErr)
 }
 
-pub(crate) fn read_input_arr20() -> Result<[u8; 20], IncorrectInputLength> {
+pub(crate) fn read_input_arr20() -> Result<[u8; 20], errors::IncorrectInputLength> {
     unsafe {
         exports::input(INPUT_REGISTER_ID);
         if exports::register_len(INPUT_REGISTER_ID) == 20 {
@@ -182,7 +183,7 @@ pub(crate) fn read_input_arr20() -> Result<[u8; 20], IncorrectInputLength> {
             exports::read_register(INPUT_REGISTER_ID, bytes.as_ptr() as *const u64 as u64);
             Ok(bytes)
         } else {
-            Err(IncorrectInputLength)
+            Err(errors::IncorrectInputLength)
         }
     }
 }
@@ -230,16 +231,16 @@ pub fn read_storage_len(key: &[u8]) -> Option<usize> {
 }
 
 /// Read u64 from storage at given key.
-pub(crate) fn read_u64(key: &[u8]) -> Result<u64, ReadU64Error> {
+pub(crate) fn read_u64(key: &[u8]) -> Result<u64, errors::ReadU64Error> {
     read_storage_len(key)
-        .ok_or(ReadU64Error::MissingValue)
+        .ok_or(errors::ReadU64Error::MissingValue)
         .and_then(|value_size| unsafe {
             if value_size == 8 {
                 let result = [0u8; 8];
                 exports::read_register(READ_STORAGE_REGISTER_ID, result.as_ptr() as _);
                 Ok(u64::from_le_bytes(result))
             } else {
-                Err(ReadU64Error::InvalidU64)
+                Err(errors::ReadU64Error::InvalidU64)
             }
         })
 }
@@ -488,31 +489,4 @@ pub fn promise_batch_action_function_call(
 #[allow(dead_code)]
 pub fn storage_has_key(key: &[u8]) -> bool {
     unsafe { exports::storage_has_key(key.len() as _, key.as_ptr() as _) == 1 }
-}
-
-pub(crate) struct IncorrectInputLength;
-impl AsRef<[u8]> for IncorrectInputLength {
-    fn as_ref(&self) -> &[u8] {
-        b"ERR_INCORRECT_INPUT_LENGTH"
-    }
-}
-
-pub(crate) struct ArgParseErr;
-impl AsRef<[u8]> for ArgParseErr {
-    fn as_ref(&self) -> &[u8] {
-        b"ERR_ARG_PARSE"
-    }
-}
-
-pub(crate) enum ReadU64Error {
-    InvalidU64,
-    MissingValue,
-}
-impl AsRef<[u8]> for ReadU64Error {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            Self::InvalidU64 => b"ERR_NOT_U64",
-            Self::MissingValue => b"ERR_U64_NOT_FOUND",
-        }
-    }
 }
