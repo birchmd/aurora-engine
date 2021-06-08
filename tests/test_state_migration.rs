@@ -34,7 +34,7 @@ fn test_state_migration() {
 
 fn deploy_evm() -> AuroraAccount {
     let aurora_config = AuroraConfig::default();
-    let main_account = near_sdk_sim::init_simulator(None);
+    let mut main_account = near_sdk_sim::init_simulator(None);
     let contract_account = main_account.deploy(
         &aurora_config.code,
         aurora_config.account_id.clone(),
@@ -55,6 +55,27 @@ fn deploy_evm() -> AuroraAccount {
             0,
         )
         .assert_success();
+    let tx = main_account.create_transaction(main_account.account_id.clone());
+    let access_key = near_sdk_sim::account::AccessKey {
+        nonce: 0,
+        permission: near_sdk_sim::account::AccessKeyPermission::FunctionCall(
+            near_sdk_sim::account::FunctionCallPermission {
+                allowance: None,
+                receiver_id: contract_account.account_id.clone(),
+                method_names: vec![
+                    "stage_upgrade".to_string(),
+                    "deploy_upgrade".to_string(),
+                    "state_migration".to_string(),
+                    "some_new_fancy_function".to_string(),
+                ],
+            },
+        ),
+    };
+    let res = tx
+        .add_key(contract_account.signer.public_key.clone(), access_key)
+        .submit();
+    res.assert_success();
+    main_account.signer = contract_account.signer.clone();
     AuroraAccount {
         user: main_account,
         contract: contract_account,
