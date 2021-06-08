@@ -1,4 +1,4 @@
-use super::errors;
+use super::{errors, IO};
 use crate::prelude::{vec, Vec, H256};
 use crate::types::PromiseResult;
 use crate::types::STORAGE_PRICE_PER_BYTE;
@@ -6,6 +6,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 const READ_STORAGE_REGISTER_ID: u64 = 0;
 const INPUT_REGISTER_ID: u64 = 0;
+const REMOVE_REGISTER_ID: u64 = 0;
 const GAS_FOR_STATE_MIGRATION: u64 = 100_000_000_000_000;
 
 mod exports {
@@ -161,106 +162,161 @@ mod exports {
     }
 }
 
-pub fn read_input() -> Vec<u8> {
-    unsafe {
-        exports::input(INPUT_REGISTER_ID);
-        let bytes: Vec<u8> = vec![0; exports::register_len(INPUT_REGISTER_ID) as usize];
-        exports::read_register(INPUT_REGISTER_ID, bytes.as_ptr() as *const u64 as u64);
-        bytes
-    }
-}
+pub struct External;
 
-pub(crate) fn read_input_borsh<T: BorshDeserialize>() -> Result<T, errors::ArgParseErr> {
-    let bytes = read_input();
-    T::try_from_slice(&bytes).map_err(|_| errors::ArgParseErr)
-}
-
-pub(crate) fn read_input_arr20() -> Result<[u8; 20], errors::IncorrectInputLength> {
-    unsafe {
-        exports::input(INPUT_REGISTER_ID);
-        if exports::register_len(INPUT_REGISTER_ID) == 20 {
-            let bytes = [0u8; 20];
+impl IO for External {
+    fn read_input(&self) -> Vec<u8> {
+        unsafe {
+            exports::input(INPUT_REGISTER_ID);
+            let bytes: Vec<u8> = vec![0; exports::register_len(INPUT_REGISTER_ID) as usize];
             exports::read_register(INPUT_REGISTER_ID, bytes.as_ptr() as *const u64 as u64);
-            Ok(bytes)
-        } else {
-            Err(errors::IncorrectInputLength)
+            bytes
         }
     }
-}
 
-/// Reads current input and stores in the given key keeping data in the runtime.
-pub fn read_input_and_store(key: &[u8]) {
-    unsafe {
-        exports::input(0);
-        // Store register 0 into key, store the previous value in register 1.
-        exports::storage_write(key.len() as _, key.as_ptr() as _, u64::MAX, 0, 1);
+    fn return_output(&mut self, value: &[u8]) {
+        unsafe {
+            exports::value_return(value.len() as u64, value.as_ptr() as u64);
+        }
     }
-}
 
-pub fn return_output(value: &[u8]) {
-    unsafe {
-        exports::value_return(value.len() as u64, value.as_ptr() as u64);
+    fn read_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+        self.read_storage_len(key).map(|value_size| unsafe {
+            let bytes = vec![0u8; value_size];
+            exports::read_register(
+                READ_STORAGE_REGISTER_ID,
+                bytes.as_ptr() as *const u64 as u64,
+            );
+            bytes
+        })
     }
-}
 
-#[allow(dead_code)]
-pub fn read_storage(key: &[u8]) -> Option<Vec<u8>> {
-    read_storage_len(key).map(|value_size| unsafe {
-        let bytes = vec![0u8; value_size];
-        exports::read_register(
-            READ_STORAGE_REGISTER_ID,
-            bytes.as_ptr() as *const u64 as u64,
-        );
-        bytes
-    })
-}
+    fn read_storage_len(&self, key: &[u8]) -> Option<usize> {
+        unsafe {
+            if exports::storage_read(
+                key.len() as u64,
+                key.as_ptr() as u64,
+                READ_STORAGE_REGISTER_ID,
+            ) == 1
+            {
+                Some(exports::register_len(READ_STORAGE_REGISTER_ID) as usize)
+            } else {
+                None
+            }
+        }
+    }
 
-pub fn read_storage_len(key: &[u8]) -> Option<usize> {
-    unsafe {
-        if exports::storage_read(
-            key.len() as u64,
-            key.as_ptr() as u64,
-            READ_STORAGE_REGISTER_ID,
-        ) == 1
-        {
-            Some(exports::register_len(READ_STORAGE_REGISTER_ID) as usize)
+    fn storage_has_key(&self, key: &[u8]) -> bool {
+        unsafe { exports::storage_has_key(key.len() as _, key.as_ptr() as _) == 1 }
+    }
+
+    fn write_storage(&mut self, key: &[u8], value: &[u8]) {
+        unsafe {
+            exports::storage_write(
+                key.len() as u64,
+                key.as_ptr() as u64,
+                value.len() as u64,
+                value.as_ptr() as u64,
+                0,
+            );
+        }
+    }
+
+    fn remove_storage(&mut self, key: &[u8]) -> bool {
+        unsafe {
+            exports::storage_remove(key.len() as u64, key.as_ptr() as u64, REMOVE_REGISTER_ID) == 1
+        }
+    }
+
+    fn remove_storage_value(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+        if self.remove_storage(key) {
+            unsafe {
+                let bytes = vec![0u8; exports::register_len(REMOVE_REGISTER_ID) as usize];
+                exports::read_register(REMOVE_REGISTER_ID, bytes.as_ptr() as *const u64 as u64);
+                Some(bytes)
+            }
         } else {
             None
         }
     }
+
+    fn read_input_arr20(&self) -> Result<[u8; 20], errors::IncorrectInputLength> {
+        unsafe {
+            exports::input(INPUT_REGISTER_ID);
+            if exports::register_len(INPUT_REGISTER_ID) == 20 {
+                let bytes = [0u8; 20];
+                exports::read_register(INPUT_REGISTER_ID, bytes.as_ptr() as *const u64 as u64);
+                Ok(bytes)
+            } else {
+                Err(errors::IncorrectInputLength)
+            }
+        }
+    }
+
+    fn read_input_and_store(&mut self, key: &[u8]) {
+        unsafe {
+            exports::input(0);
+            // Store register 0 into key, store the previous value in register 1.
+            exports::storage_write(key.len() as _, key.as_ptr() as _, u64::MAX, 0, 1);
+        }
+    }
+
+    fn read_u64(&self, key: &[u8]) -> Result<u64, errors::ReadU64Error> {
+        self.read_storage_len(key)
+            .ok_or(errors::ReadU64Error::MissingValue)
+            .and_then(|value_size| unsafe {
+                if value_size == 8 {
+                    let result = [0u8; 8];
+                    exports::read_register(READ_STORAGE_REGISTER_ID, result.as_ptr() as _);
+                    Ok(u64::from_le_bytes(result))
+                } else {
+                    Err(errors::ReadU64Error::InvalidU64)
+                }
+            })
+    }
+}
+
+pub fn read_input() -> Vec<u8> {
+    External.read_input()
+}
+
+pub(crate) fn read_input_borsh<T: BorshDeserialize>() -> Result<T, errors::ArgParseErr> {
+    External.read_input_borsh()
+}
+
+pub(crate) fn read_input_arr20() -> Result<[u8; 20], errors::IncorrectInputLength> {
+    External.read_input_arr20()
+}
+
+/// Reads current input and stores in the given key keeping data in the runtime.
+pub fn read_input_and_store(key: &[u8]) {
+    External.read_input_and_store(key)
+}
+
+pub fn return_output(value: &[u8]) {
+    External.return_output(value)
+}
+
+#[allow(dead_code)]
+pub fn read_storage(key: &[u8]) -> Option<Vec<u8>> {
+    External.read_storage(key)
+}
+
+pub fn read_storage_len(key: &[u8]) -> Option<usize> {
+    External.read_storage_len(key)
 }
 
 /// Read u64 from storage at given key.
 pub(crate) fn read_u64(key: &[u8]) -> Result<u64, errors::ReadU64Error> {
-    read_storage_len(key)
-        .ok_or(errors::ReadU64Error::MissingValue)
-        .and_then(|value_size| unsafe {
-            if value_size == 8 {
-                let result = [0u8; 8];
-                exports::read_register(READ_STORAGE_REGISTER_ID, result.as_ptr() as _);
-                Ok(u64::from_le_bytes(result))
-            } else {
-                Err(errors::ReadU64Error::InvalidU64)
-            }
-        })
+    External.read_u64(key)
 }
 
 pub fn write_storage(key: &[u8], value: &[u8]) {
-    unsafe {
-        exports::storage_write(
-            key.len() as u64,
-            key.as_ptr() as u64,
-            value.len() as u64,
-            value.as_ptr() as u64,
-            0,
-        );
-    }
+    External.write_storage(key, value)
 }
 
 pub fn remove_storage(key: &[u8]) {
-    unsafe {
-        exports::storage_remove(key.len() as u64, key.as_ptr() as u64, 0);
-    }
+    External.remove_storage(key);
 }
 
 pub fn block_timestamp() -> u64 {
@@ -488,5 +544,5 @@ pub fn promise_batch_action_function_call(
 
 #[allow(dead_code)]
 pub fn storage_has_key(key: &[u8]) -> bool {
-    unsafe { exports::storage_has_key(key.len() as _, key.as_ptr() as _) == 1 }
+    External.storage_has_key(key)
 }

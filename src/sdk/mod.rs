@@ -14,8 +14,10 @@ pub(crate) trait IO {
     fn read_storage_len(&self, key: &[u8]) -> Option<usize>;
     fn storage_has_key(&self, key: &[u8]) -> bool;
     fn write_storage(&mut self, key: &[u8], value: &[u8]);
-    /// Remove entry from storage without capturing the value present at the given key
-    fn remove_storage(&mut self, key: &[u8]);
+    /// Remove entry from storage without capturing the value present at the given key.
+    /// Returns `true` if the key had some value associated with it (now removed), and
+    /// `false` otherwise.
+    fn remove_storage(&mut self, key: &[u8]) -> bool;
     /// Remove entry from storage and capture the value present at the given key (if any)
     fn remove_storage_value(&mut self, key: &[u8]) -> Option<Vec<u8>>;
 
