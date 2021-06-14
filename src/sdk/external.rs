@@ -1,7 +1,6 @@
-use super::{errors, IO};
+use super::{errors, Env, IO};
 use crate::prelude::{vec, Vec, H256};
 use crate::types::PromiseResult;
-use crate::types::STORAGE_PRICE_PER_BYTE;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 const READ_STORAGE_REGISTER_ID: u64 = 0;
@@ -276,6 +275,60 @@ impl IO for External {
     }
 }
 
+impl Env for External {
+    fn block_timestamp(&self) -> u64 {
+        unsafe { exports::block_timestamp() }
+    }
+
+    fn block_index(&self) -> u64 {
+        unsafe { exports::block_index() }
+    }
+
+    fn attached_deposit(&self) -> u128 {
+        unsafe {
+            let data = [0u8; core::mem::size_of::<u128>()];
+            exports::attached_deposit(data.as_ptr() as u64);
+            u128::from_le_bytes(data)
+        }
+    }
+
+    fn prepaid_gas(&self) -> u64 {
+        unsafe { exports::prepaid_gas() }
+    }
+
+    fn predecessor_account_id(&self) -> Vec<u8> {
+        unsafe {
+            exports::predecessor_account_id(1);
+            let bytes: Vec<u8> = vec![0u8; exports::register_len(1) as usize];
+            exports::read_register(1, bytes.as_ptr() as *const u64 as u64);
+            bytes
+        }
+    }
+
+    fn current_account_id(&self) -> Vec<u8> {
+        unsafe {
+            exports::current_account_id(1);
+            let bytes: Vec<u8> = vec![0u8; exports::register_len(1) as usize];
+            exports::read_register(1, bytes.as_ptr() as *const u64 as u64);
+            bytes
+        }
+    }
+
+    fn panic_utf8(bytes: &[u8]) -> ! {
+        unsafe {
+            exports::panic_utf8(bytes.len() as u64, bytes.as_ptr() as u64);
+        }
+        unreachable!()
+    }
+
+    fn log(&mut self, text: &str) {
+        let bytes = text.as_bytes();
+        unsafe {
+            exports::log_utf8(bytes.len() as u64, bytes.as_ptr() as u64);
+        }
+    }
+}
+
 pub fn read_input() -> Vec<u8> {
     External.read_input()
 }
@@ -320,39 +373,19 @@ pub fn remove_storage(key: &[u8]) {
 }
 
 pub fn block_timestamp() -> u64 {
-    unsafe { exports::block_timestamp() }
+    External.block_timestamp()
 }
 
 pub fn block_index() -> u64 {
-    unsafe { exports::block_index() }
-}
-
-#[allow(dead_code)]
-pub fn panic() {
-    unsafe { exports::panic() }
+    External.block_index()
 }
 
 pub fn panic_utf8(bytes: &[u8]) -> ! {
-    unsafe {
-        exports::panic_utf8(bytes.len() as u64, bytes.as_ptr() as u64);
-    }
-    unreachable!()
-}
-
-#[allow(dead_code)]
-pub fn log_utf8(bytes: &[u8]) {
-    unsafe {
-        exports::log_utf8(bytes.len() as u64, bytes.as_ptr() as u64);
-    }
+    External::panic_utf8(bytes)
 }
 
 pub fn predecessor_account_id() -> Vec<u8> {
-    unsafe {
-        exports::predecessor_account_id(1);
-        let bytes: Vec<u8> = vec![0u8; exports::register_len(1) as usize];
-        exports::read_register(1, bytes.as_ptr() as *const u64 as u64);
-        bytes
-    }
+    External.predecessor_account_id()
 }
 
 /// Calls environment sha256 on given input.
@@ -377,12 +410,7 @@ pub fn keccak(input: &[u8]) -> H256 {
 
 /// Returns account id of the current account.
 pub fn current_account_id() -> Vec<u8> {
-    unsafe {
-        exports::current_account_id(1);
-        let bytes: Vec<u8> = vec![0u8; exports::register_len(1) as usize];
-        exports::read_register(1, bytes.as_ptr() as *const u64 as u64);
-        bytes
-    }
+    External.current_account_id()
 }
 
 /// Deploy code from given key in place of the current key.
@@ -411,12 +439,12 @@ pub fn save_contract<T: BorshSerialize>(key: &[u8], data: &T) {
 
 #[allow(dead_code)]
 pub fn log(data: &str) {
-    log_utf8(data.as_bytes())
+    External.log(data)
 }
 
 #[allow(unused)]
 pub fn prepaid_gas() -> u64 {
-    unsafe { exports::prepaid_gas() }
+    External.prepaid_gas()
 }
 
 pub fn promise_create(
@@ -497,11 +525,7 @@ pub fn assert_private_call() {
 }
 
 pub fn attached_deposit() -> u128 {
-    unsafe {
-        let data = [0u8; core::mem::size_of::<u128>()];
-        exports::attached_deposit(data.as_ptr() as u64);
-        u128::from_le_bytes(data)
-    }
+    External.attached_deposit()
 }
 
 pub fn assert_one_yocto() {
@@ -515,7 +539,7 @@ pub fn promise_batch_action_transfer(promise_index: u64, amount: u128) {
 }
 
 pub fn storage_byte_cost() -> u128 {
-    STORAGE_PRICE_PER_BYTE
+    External::storage_byte_cost()
 }
 
 pub fn promise_batch_create(account_id: &[u8]) -> u64 {

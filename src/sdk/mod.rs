@@ -73,7 +73,7 @@ pub(crate) trait Env {
     fn predecessor_account_id(&self) -> Vec<u8>;
     fn current_account_id(&self) -> Vec<u8>;
     fn panic_utf8(bytes: &[u8]) -> !;
-    fn log_utf8(&mut self, bytes: &[u8]);
+    fn log(&mut self, bytes: &str);
 
     fn is_private_call(&self) -> bool {
         self.predecessor_account_id() == self.current_account_id()
