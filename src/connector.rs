@@ -178,7 +178,7 @@ impl EthConnectorContract {
 
     /// Deposit all types of tokens
     pub fn deposit(&self) {
-        self.assert_not_paused(PAUSE_DEPOSIT);
+        self.assert_not_paused(PAUSE_DEPOSIT, &sdk::External);
 
         #[cfg(feature = "log")]
         sdk::log("[Deposit tokens]");
@@ -400,7 +400,7 @@ impl EthConnectorContract {
     /// Withdraw from NEAR accounts
     /// NOTE: it should be without any log data
     pub fn withdraw_near(&mut self) {
-        self.assert_not_paused(PAUSE_WITHDRAW);
+        self.assert_not_paused(PAUSE_WITHDRAW, &sdk::External);
 
         sdk::assert_one_yocto();
         let args = WithdrawCallArgs::try_from_slice(&sdk::read_input()).expect(ERR_FAILED_PARSE);
@@ -640,25 +640,26 @@ impl EthConnectorContract {
 
     /// Get Eth connector paused flags
     pub fn get_paused_flags(&self) -> PausedMask {
-        self.get_paused()
+        self.get_paused(&sdk::External)
     }
 
     /// Set Eth connector paused flags
     pub fn set_paused_flags(&mut self, args: PauseEthConnectorCallArgs) {
-        self.set_paused(args.paused_mask);
+        self.set_paused(args.paused_mask, &mut sdk::External);
     }
 }
 
-impl AdminControlled for EthConnectorContract {
-    fn get_paused(&self) -> PausedMask {
+impl<S: sdk::Env + sdk::IO> AdminControlled<S> for EthConnectorContract {
+    fn get_paused(&self, _s: &S) -> PausedMask {
         self.paused_mask
     }
 
-    fn set_paused(&mut self, paused_mask: PausedMask) {
+    fn set_paused(&mut self, paused_mask: PausedMask, s: &mut S) {
         self.paused_mask = paused_mask;
-        sdk::save_contract(
+        s.write_borsh(
             &Self::get_contract_key(&EthConnectorStorageId::PausedMask),
             &self.paused_mask,
-        );
+        )
+        .sdk_unwrap();
     }
 }

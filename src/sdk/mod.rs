@@ -1,5 +1,5 @@
 use crate::prelude::Vec;
-use borsh::BorshDeserialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 
 #[cfg(feature = "engine")]
 mod external;
@@ -58,6 +58,16 @@ pub(crate) trait IO {
         let mut result = [0u8; 8];
         result.copy_from_slice(&value);
         Ok(u64::from_le_bytes(result))
+    }
+
+    fn write_borsh<T: BorshSerialize>(
+        &mut self,
+        key: &[u8],
+        data: &T,
+    ) -> Result<(), errors::SerializationFailed> {
+        data.try_to_vec()
+            .map(|bytes| self.write_storage(key, &bytes))
+            .map_err(|_| errors::SerializationFailed)
     }
 
     fn storage_byte_cost() -> u128 {
@@ -138,6 +148,13 @@ pub(crate) mod errors {
                 Self::InvalidU64 => b"ERR_NOT_U64",
                 Self::MissingValue => b"ERR_U64_NOT_FOUND",
             }
+        }
+    }
+
+    pub(crate) struct SerializationFailed;
+    impl AsRef<[u8]> for SerializationFailed {
+        fn as_ref(&self) -> &[u8] {
+            b"ERR_SERIALIZATION"
         }
     }
 }
