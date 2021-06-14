@@ -1,4 +1,4 @@
-use super::{errors, Env, IO};
+use super::{errors, Env, PromisesAPI, IO};
 use crate::prelude::{vec, Vec, H256};
 use crate::types::PromiseResult;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -329,6 +329,110 @@ impl Env for External {
     }
 }
 
+impl PromisesAPI for External {
+    fn promise_create(
+        &mut self,
+        account_id: &[u8],
+        method_name: &[u8],
+        arguments: &[u8],
+        amount: u128,
+        gas: u64,
+    ) -> u64 {
+        unsafe {
+            exports::promise_create(
+                account_id.len() as _,
+                account_id.as_ptr() as _,
+                method_name.len() as _,
+                method_name.as_ptr() as _,
+                arguments.len() as _,
+                arguments.as_ptr() as _,
+                &amount as *const u128 as _,
+                gas,
+            )
+        }
+    }
+
+    fn promise_then(
+        &mut self,
+        promise_idx: u64,
+        account_id: &[u8],
+        method_name: &[u8],
+        arguments: &[u8],
+        amount: u128,
+        gas: u64,
+    ) -> u64 {
+        unsafe {
+            exports::promise_then(
+                promise_idx,
+                account_id.len() as _,
+                account_id.as_ptr() as _,
+                method_name.len() as _,
+                method_name.as_ptr() as _,
+                arguments.len() as _,
+                arguments.as_ptr() as _,
+                &amount as *const u128 as _,
+                gas,
+            )
+        }
+    }
+
+    fn promise_return(&mut self, promise_idx: u64) {
+        unsafe {
+            exports::promise_return(promise_idx);
+        }
+    }
+
+    fn promise_results_count(&self) -> u64 {
+        unsafe { exports::promise_results_count() }
+    }
+
+    fn promise_result(&self, result_idx: u64) -> PromiseResult {
+        unsafe {
+            match exports::promise_result(result_idx, 0) {
+                0 => PromiseResult::NotReady,
+                1 => {
+                    let bytes: Vec<u8> = vec![0; exports::register_len(0) as usize];
+                    exports::read_register(0, bytes.as_ptr() as *const u64 as u64);
+                    PromiseResult::Successful(bytes)
+                }
+                2 => PromiseResult::Failed,
+                _ => panic_utf8(b"ERR_PROMISE_RETURN_CODE"),
+            }
+        }
+    }
+
+    fn promise_batch_create(&mut self, account_id: &[u8]) -> u64 {
+        unsafe { exports::promise_batch_create(account_id.len() as _, account_id.as_ptr() as _) }
+    }
+
+    fn promise_batch_action_transfer(&mut self, promise_index: u64, amount: u128) {
+        unsafe {
+            exports::promise_batch_action_transfer(promise_index, &amount as *const u128 as _);
+        }
+    }
+
+    fn promise_batch_action_function_call(
+        &mut self,
+        promise_idx: u64,
+        method_name: &[u8],
+        arguments: &[u8],
+        amount: u128,
+        gas: u64,
+    ) {
+        unsafe {
+            exports::promise_batch_action_function_call(
+                promise_idx,
+                method_name.len() as _,
+                method_name.as_ptr() as _,
+                arguments.len() as _,
+                arguments.as_ptr() as _,
+                &amount as *const u128 as _,
+                gas,
+            )
+        }
+    }
+}
+
 pub fn read_input() -> Vec<u8> {
     External.read_input()
 }
@@ -454,18 +558,7 @@ pub fn promise_create(
     amount: u128,
     gas: u64,
 ) -> u64 {
-    unsafe {
-        exports::promise_create(
-            account_id.len() as _,
-            account_id.as_ptr() as _,
-            method_name.len() as _,
-            method_name.as_ptr() as _,
-            arguments.len() as _,
-            arguments.as_ptr() as _,
-            &amount as *const u128 as _,
-            gas,
-        )
-    }
+    External.promise_create(account_id, method_name, arguments, amount, gas)
 }
 
 pub fn promise_then(
@@ -476,44 +569,19 @@ pub fn promise_then(
     amount: u128,
     gas: u64,
 ) -> u64 {
-    unsafe {
-        exports::promise_then(
-            promise_idx,
-            account_id.len() as _,
-            account_id.as_ptr() as _,
-            method_name.len() as _,
-            method_name.as_ptr() as _,
-            arguments.len() as _,
-            arguments.as_ptr() as _,
-            &amount as *const u128 as _,
-            gas,
-        )
-    }
+    External.promise_then(promise_idx, account_id, method_name, arguments, amount, gas)
 }
 
 pub fn promise_return(promise_idx: u64) {
-    unsafe {
-        exports::promise_return(promise_idx);
-    }
+    External.promise_return(promise_idx)
 }
 
 pub fn promise_results_count() -> u64 {
-    unsafe { exports::promise_results_count() }
+    External.promise_results_count()
 }
 
 pub fn promise_result(result_idx: u64) -> PromiseResult {
-    unsafe {
-        match exports::promise_result(result_idx, 0) {
-            0 => PromiseResult::NotReady,
-            1 => {
-                let bytes: Vec<u8> = vec![0; exports::register_len(0) as usize];
-                exports::read_register(0, bytes.as_ptr() as *const u64 as u64);
-                PromiseResult::Successful(bytes)
-            }
-            2 => PromiseResult::Failed,
-            _ => panic_utf8(b"ERR_PROMISE_RETURN_CODE"),
-        }
-    }
+    External.promise_result(result_idx)
 }
 
 pub fn assert_private_call() {
@@ -533,9 +601,7 @@ pub fn assert_one_yocto() {
 }
 
 pub fn promise_batch_action_transfer(promise_index: u64, amount: u128) {
-    unsafe {
-        exports::promise_batch_action_transfer(promise_index, &amount as *const u128 as _);
-    }
+    External.promise_batch_action_transfer(promise_index, amount)
 }
 
 pub fn storage_byte_cost() -> u128 {
@@ -543,7 +609,7 @@ pub fn storage_byte_cost() -> u128 {
 }
 
 pub fn promise_batch_create(account_id: &[u8]) -> u64 {
-    unsafe { exports::promise_batch_create(account_id.len() as _, account_id.as_ptr() as _) }
+    External.promise_batch_create(account_id)
 }
 
 pub fn promise_batch_action_function_call(
@@ -553,17 +619,7 @@ pub fn promise_batch_action_function_call(
     amount: u128,
     gas: u64,
 ) {
-    unsafe {
-        exports::promise_batch_action_function_call(
-            promise_idx,
-            method_name.len() as _,
-            method_name.as_ptr() as _,
-            arguments.len() as _,
-            arguments.as_ptr() as _,
-            &amount as *const u128 as _,
-            gas,
-        )
-    }
+    External.promise_batch_action_function_call(promise_idx, method_name, arguments, amount, gas)
 }
 
 #[allow(dead_code)]
