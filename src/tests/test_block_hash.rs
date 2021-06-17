@@ -6,19 +6,21 @@ use near_primitives::borsh::BorshSerialize;
 use near_primitives::hash::CryptoHash;
 use near_primitives::transaction::{self, Action, SignedTransaction, Transaction};
 use near_primitives::views::{FinalExecutionOutcomeView, FinalExecutionStatus};
-use near_sdk_sim::{DEFAULT_GAS, STORAGE_AMOUNT};
 use std::str::FromStr;
 use serde_json;
 use serde::Deserialize;
 
 use crate::prelude::Address;
 
+const DEFAULT_GAS: u64 = 300_000_000_000_000;
+const STORAGE_AMOUNT: u128 = 50_000_000_000_000_000_000_000_000;
+
 #[test]
 fn test_testnet() {
     actix::System::new().block_on(async move {
         let client = create_testnet_client();
 
-        let reader = std::fs::File::open("/home/birchmd/.near-credentials/testnet/birchmd.testnet.json").unwrap();
+        /*let reader = std::fs::File::open("/home/birchmd/.near-credentials/testnet/birchmd.testnet.json").unwrap();
         let json_key: JsonKey = serde_json::from_reader(reader).unwrap();
         let near_signing_key = SigningKey::parse_key(&json_key.account_id, &json_key.private_key);
         let eth_signing_key = secp256k1::SecretKey::parse_slice(&hex::decode("7d640019603753a2449e6b57201ea1e7ee642b287cba417e8e9ba253c7cfa442").unwrap()).unwrap();
@@ -33,7 +35,8 @@ fn test_testnet() {
         std::thread::sleep(std::time::Duration::from_secs(5));
         println!("{:?}", get_erc20_balance(&client, &near_signing_key, &eth_signing_key, signing_address).await);
         std::thread::sleep(std::time::Duration::from_secs(5));
-        println!("{:?}", get_erc20_balance(&client, &near_signing_key, &eth_signing_key, dest_address).await);
+        println!("{:?}", get_erc20_balance(&client, &near_signing_key, &eth_signing_key, dest_address).await);*/
+        println!("{:?}", call_aurora_ft_balance_of(&client, "aurora").await);
     });
 }
 
@@ -166,6 +169,26 @@ async fn call_aurora_view_fn(client: &JsonRpcClient, method_name: &str, address:
     };
 
     crate::prelude::U256::from_big_endian(&bytes)
+}
+
+async fn call_aurora_ft_balance_of(client: &JsonRpcClient, account_id: &str) -> String {
+    let response = client.query(RpcQueryRequest {
+        block_reference: near_primitives::types::Finality::Final.into(),
+        request: near_primitives::views::QueryRequest::CallFunction {
+            account_id: "aurora".to_string(),
+            method_name: "ft_balance_of".to_string(),
+            args: crate::prelude::format!(r#"{{"account_id": "{}"}}"#, account_id).as_bytes().to_vec().into()
+        }
+    }).await.unwrap();
+
+    let bytes = match response.kind {
+        QueryResponseKind::CallResult(result) => {
+            result.result
+        }
+        _ => panic!("Didn't get call result"),
+    };
+
+    String::from_utf8(bytes).unwrap()
 }
 
 async fn latest_block_and_nonce(
