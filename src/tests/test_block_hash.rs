@@ -20,7 +20,7 @@ fn test_testnet() {
     actix::System::new().block_on(async move {
         let client = create_testnet_client();
 
-        let reader = std::fs::File::open("/home/birchmd/.near-credentials/testnet/birchmd.testnet.json").unwrap();
+        /*let reader = std::fs::File::open("/home/birchmd/.near-credentials/testnet/birchmd.testnet.json").unwrap();
         let json_key: JsonKey = serde_json::from_reader(reader).unwrap();
         let near_signing_key = SigningKey::parse_key(&json_key.account_id, &json_key.private_key);
         let eth_signing_key = secp256k1::SecretKey::parse_slice(&hex::decode("7d640019603753a2449e6b57201ea1e7ee642b287cba417e8e9ba253c7cfa442").unwrap()).unwrap();
@@ -46,7 +46,11 @@ fn test_testnet() {
         println!("AURORA_FT_BALANCE: {:?}", call_aurora_ft_balance_of(&client, "aurora").await);
         println!("BIRCHMD_FT_BALANCE: {:?}", call_aurora_ft_balance_of(&client, "birchmd.testnet").await);
         println!("EXIT_ETH_BALANCE: {:?}", call_aurora_view_fn(&client, "get_balance", Address::from_slice(&hex::decode("e9217bc70b7ed1f598ddd3199e80b093fa71124f").unwrap())).await);
-        println!("{:?}_ETH_BALANCE: {:?}", signing_address, call_aurora_view_fn(&client, "get_balance", signing_address).await);
+        println!("{:?}_ETH_BALANCE: {:?}", signing_address, call_aurora_view_fn(&client, "get_balance", signing_address).await);*/
+
+        let result = get_tx_info(&client, "CCJSTXsu2qZJEWST1dUxRutnV2pZm9fK2KmPFhK3VGwv".to_string(), "748dbf1390e8f51aa4ec3cadb637f081.test.near".to_string()).await;
+
+        println!("{:?}", result);
     });
 }
 
@@ -184,7 +188,17 @@ fn create_submit_tx(
 }
 
 fn create_testnet_client() -> JsonRpcClient {
-    near_jsonrpc_client::new_client("http://rpc.testnet.near.org")
+    //near_jsonrpc_client::new_client("http://rpc.testnet.near.org")
+    near_jsonrpc_client::new_client("http://localhost:3030")
+}
+
+async fn get_tx_info(client: &JsonRpcClient, hash: String, account_id: String) -> FinalExecutionOutcomeView {
+    /*let response = client.query(RpcQueryRequest {
+        block_reference: near_primitives::types::Finality::None,
+        request: None,
+    });*/
+    let response = client.tx(hash, account_id).await;
+    response.unwrap()
 }
 
 async fn call_aurora_view_fn(client: &JsonRpcClient, method_name: &str, address: Address) -> crate::prelude::U256 {
