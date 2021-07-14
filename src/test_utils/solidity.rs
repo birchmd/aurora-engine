@@ -1,4 +1,5 @@
-use crate::prelude::Address;
+use crate::prelude::{Address, U256};
+use crate::transaction::LegacyEthTransaction;
 use near_sdk::serde_json;
 use serde::Deserialize;
 use std::fs;
@@ -71,6 +72,23 @@ impl ContractConstructor {
         DeployedContract {
             abi: self.abi.clone(),
             address,
+        }
+    }
+
+    pub fn deploy_without_args(&self, nonce: U256) -> LegacyEthTransaction {
+        let data = self
+            .abi
+            .constructor()
+            .unwrap()
+            .encode_input(self.code.clone(), &[])
+            .unwrap();
+        LegacyEthTransaction {
+            nonce,
+            gas_price: Default::default(),
+            gas: u64::MAX.into(),
+            to: None,
+            value: Default::default(),
+            data,
         }
     }
 }
