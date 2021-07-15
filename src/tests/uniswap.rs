@@ -2,29 +2,53 @@ use crate::prelude::Address;
 use crate::test_utils::{
     self,
     erc20::{ERC20Constructor, ERC20},
-    uniswap::{Factory, FactoryConstructor},
+    uniswap::{Factory, FactoryConstructor, MintParams, PositionManager, PositionManagerConstructor},
     Signer,
 };
 use crate::types::Wei;
 use secp256k1::SecretKey;
+use primitive_types::U256;
 
 const INITIAL_BALANCE: u64 = 1000;
 const INITIAL_NONCE: u64 = 0;
+// The "fee" can only be specific values, see
+// https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/UniswapV3Factory.sol#L26
+const POOL_FEE: u64 = 500;
 
 #[test]
 fn it_works() {
-    let (mut runner, mut signer, factory) = initialize_uniswap_factory();
+    let (mut runner, mut signer, factory, manager) = initialize_uniswap_factory();
 
     let token_a = create_token("token_a", "A", &mut runner, &mut signer);
     let token_b = create_token("token_b", "B", &mut runner, &mut signer);
 
-    let result = create_pool(
+    create_pool(
         token_a.0.address,
         token_b.0.address,
         &factory,
         &mut runner,
         &mut signer,
     );
+
+    let token0 = std::cmp::min(token_a.0.address, token_b.0.address);
+    let token1 = std::cmp::max(token_a.0.address, token_b.0.address);
+
+    let nonce = signer.use_nonce();
+    let add_liquidity_tx = manager.mint(MintParams {
+        token0,
+        token1,
+        fee: POOL_FEE.into(),
+        // https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/libraries/TickMath.sol#L9
+        tick_lower: -887272,
+        tick_upper: 887272,
+        amount0_desired: 100.into(),
+        amount1_desired: 100.into(),
+        amount0_min: U256::one(),
+        amount1_min: U256::one(),
+        recipient: test_utils::address_from_secret_key(&signer.secret_key),
+        deadline: U256::MAX, // no deadline
+    }, nonce.into());
+    let result = runner.submit_transaction(&signer.secret_key, add_liquidity_tx).unwrap();
 
     panic!("{:?}", result);
 }
@@ -37,9 +61,8 @@ fn create_pool(
     signer: &mut Signer,
 ) -> Address {
     let nonce = signer.use_nonce();
-    // The "fee" can only be specific values, see
-    // https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/UniswapV3Factory.sol#L26
-    let create_pool_tx = factory.create_pool(token_a, token_b, 500.into(), nonce.into());
+
+    let create_pool_tx = factory.create_pool(token_a, token_b, POOL_FEE.into(), nonce.into());
     let result = runner
         .submit_transaction(&signer.secret_key, create_pool_tx)
         .unwrap();
@@ -79,7 +102,7 @@ fn create_token(
     contract
 }
 
-fn initialize_uniswap_factory() -> (test_utils::AuroraRunner, Signer, Factory) {
+fn initialize_uniswap_factory() -> (test_utils::AuroraRunner, Signer, Factory, PositionManager) {
     // set up Aurora runner and accounts
     let mut runner = test_utils::deploy_evm();
     let mut rng = rand::thread_rng();
@@ -91,16 +114,26 @@ fn initialize_uniswap_factory() -> (test_utils::AuroraRunner, Signer, Factory) {
         INITIAL_NONCE.into(),
     );
 
-    let constructor = FactoryConstructor::load();
-    let contract = Factory(runner.deploy_contract(
-        &source_account,
-        |c| c.deploy(INITIAL_NONCE.into()),
-        constructor,
-    ));
-    let signer = Signer {
-        nonce: INITIAL_NONCE + 1,
+    let mut signer = Signer {
+        nonce: INITIAL_NONCE,
         secret_key: source_account,
     };
 
-    (runner, signer, contract)
+    let nonce = signer.use_nonce();
+    let factory_constructor = FactoryConstructor::load();
+    let factory = Factory(runner.deploy_contract(
+        &signer.secret_key,
+        |c| c.deploy(nonce.into()),
+        factory_constructor,
+    ));
+
+    let nonce = signer.use_nonce();
+    let manager_constructor = PositionManagerConstructor::load();
+    let manager = PositionManager(runner.deploy_contract(
+        &signer.secret_key,
+        |c| c.deploy(nonce.into()),
+        manager_constructor,
+    ));
+
+    (runner, signer, factory, manager)
 }
