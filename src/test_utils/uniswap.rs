@@ -1,4 +1,4 @@
-use crate::prelude::U256;
+use crate::prelude::{Address, U256};
 use crate::test_utils::solidity;
 use crate::transaction::LegacyEthTransaction;
 use std::path::{Path, PathBuf};
@@ -62,5 +62,36 @@ impl FactoryConstructor {
         }
 
         artifact_path
+    }
+}
+
+impl Factory {
+    pub fn create_pool(
+        &self,
+        token_a: Address,
+        token_b: Address,
+        fee: U256,
+        nonce: U256,
+    ) -> LegacyEthTransaction {
+        let data = self
+            .0
+            .abi
+            .function("createPool")
+            .unwrap()
+            .encode_input(&[
+                ethabi::Token::Address(token_a),
+                ethabi::Token::Address(token_b),
+                ethabi::Token::Uint(fee),
+            ])
+            .unwrap();
+
+        LegacyEthTransaction {
+            nonce,
+            gas_price: Default::default(),
+            gas: u64::MAX.into(),
+            to: Some(self.0.address),
+            value: Default::default(),
+            data,
+        }
     }
 }
