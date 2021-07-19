@@ -53,8 +53,8 @@ impl FactoryConstructor {
                 "UniswapV3Factory.sol",
                 "UniswapV3Factory.json",
             ]
-                .iter()
-                .collect::<PathBuf>(),
+            .iter()
+            .collect::<PathBuf>(),
         );
 
         Self(load_constructor(artifact_path))
@@ -77,15 +77,42 @@ impl PositionManagerConstructor {
                 "NonfungiblePositionManager.sol",
                 "NonfungiblePositionManager.json",
             ]
-                .iter()
-                .collect::<PathBuf>(),
+            .iter()
+            .collect::<PathBuf>(),
         );
 
         Self(load_constructor(artifact_path))
     }
 
-    pub fn deploy(&self, nonce: U256) -> LegacyEthTransaction {
-        self.0.deploy_without_args(nonce)
+    pub fn deploy(
+        &self,
+        factory: Address,
+        wrapped_eth: Address,
+        token_descriptor: Address,
+        nonce: U256,
+    ) -> LegacyEthTransaction {
+        let data = self
+            .0
+            .abi
+            .constructor()
+            .unwrap()
+            .encode_input(
+                self.0.code.clone(),
+                &[
+                    ethabi::Token::Address(factory),
+                    ethabi::Token::Address(wrapped_eth),
+                    ethabi::Token::Address(token_descriptor),
+                ],
+            )
+            .unwrap();
+        LegacyEthTransaction {
+            nonce,
+            gas_price: Default::default(),
+            gas: u64::MAX.into(),
+            to: None,
+            value: Default::default(),
+            data,
+        }
     }
 }
 
@@ -129,7 +156,7 @@ impl PositionManager {
             .abi
             .function("mint")
             .unwrap()
-            .encode_input(&[
+            .encode_input(&[ethabi::Token::Tuple(vec![
                 ethabi::Token::Address(params.token0),
                 ethabi::Token::Address(params.token1),
                 ethabi::Token::Uint(params.fee.into()),
@@ -141,7 +168,7 @@ impl PositionManager {
                 ethabi::Token::Uint(params.amount1_min),
                 ethabi::Token::Address(params.recipient),
                 ethabi::Token::Uint(params.deadline),
-            ])
+            ])])
             .unwrap();
 
         LegacyEthTransaction {

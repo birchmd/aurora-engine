@@ -2,12 +2,14 @@ use crate::prelude::Address;
 use crate::test_utils::{
     self,
     erc20::{ERC20Constructor, ERC20},
-    uniswap::{Factory, FactoryConstructor, MintParams, PositionManager, PositionManagerConstructor},
+    uniswap::{
+        Factory, FactoryConstructor, MintParams, PositionManager, PositionManagerConstructor,
+    },
     Signer,
 };
 use crate::types::Wei;
-use secp256k1::SecretKey;
 use primitive_types::U256;
+use secp256k1::SecretKey;
 
 const INITIAL_BALANCE: u64 = 1000;
 const INITIAL_NONCE: u64 = 0;
@@ -34,21 +36,26 @@ fn it_works() {
     let token1 = std::cmp::max(token_a.0.address, token_b.0.address);
 
     let nonce = signer.use_nonce();
-    let add_liquidity_tx = manager.mint(MintParams {
-        token0,
-        token1,
-        fee: POOL_FEE.into(),
-        // https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/libraries/TickMath.sol#L9
-        tick_lower: -887272,
-        tick_upper: 887272,
-        amount0_desired: 100.into(),
-        amount1_desired: 100.into(),
-        amount0_min: U256::one(),
-        amount1_min: U256::one(),
-        recipient: test_utils::address_from_secret_key(&signer.secret_key),
-        deadline: U256::MAX, // no deadline
-    }, nonce.into());
-    let result = runner.submit_transaction(&signer.secret_key, add_liquidity_tx).unwrap();
+    let add_liquidity_tx = manager.mint(
+        MintParams {
+            token0,
+            token1,
+            fee: POOL_FEE.into(),
+            // https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/libraries/TickMath.sol#L9
+            tick_lower: -887272,
+            tick_upper: 887272,
+            amount0_desired: 100.into(),
+            amount1_desired: 100.into(),
+            amount0_min: U256::one(),
+            amount1_min: U256::one(),
+            recipient: test_utils::address_from_secret_key(&signer.secret_key),
+            deadline: U256::MAX, // no deadline
+        },
+        nonce.into(),
+    );
+    let result = runner
+        .submit_transaction(&signer.secret_key, add_liquidity_tx)
+        .unwrap();
 
     panic!("{:?}", result);
 }
@@ -127,11 +134,20 @@ fn initialize_uniswap_factory() -> (test_utils::AuroraRunner, Signer, Factory, P
         factory_constructor,
     ));
 
+    let wrapped_eth = create_token("Wrapped Ether", "WETH", &mut runner, &mut signer);
+
     let nonce = signer.use_nonce();
     let manager_constructor = PositionManagerConstructor::load();
     let manager = PositionManager(runner.deploy_contract(
         &signer.secret_key,
-        |c| c.deploy(nonce.into()),
+        |c| {
+            c.deploy(
+                factory.0.address,
+                wrapped_eth.0.address,
+                Address([0; 20]),
+                nonce.into(),
+            )
+        },
         manager_constructor,
     ));
 

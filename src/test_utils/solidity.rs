@@ -59,12 +59,8 @@ impl ContractConstructor {
     where
         P: AsRef<Path>,
     {
-        println!("{:?}", contract_path.as_ref());
         let reader = std::fs::File::open(contract_path).unwrap();
-        let contract: ExtendedJsonSolidityArtifact = serde_json::from_reader(reader).map_err(|e| {
-            println!("{:?}", e.classify());
-            e
-        }).unwrap();
+        let contract: ExtendedJsonSolidityArtifact = serde_json::from_reader(reader).unwrap();
 
         Self {
             abi: contract.abi,
