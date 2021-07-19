@@ -3,9 +3,9 @@ use crate::test_utils::{
     self,
     erc20::{ERC20Constructor, ERC20},
     uniswap::{
-        Factory, FactoryConstructor, MintParams, PositionManager, PositionManagerConstructor,
+        Factory, FactoryConstructor, MintParams, Pool, PositionManager, PositionManagerConstructor,
     },
-    Signer,
+    AuroraRunner, Signer,
 };
 use crate::types::Wei;
 use primitive_types::U256;
@@ -24,12 +24,27 @@ fn it_works() {
     let token_a = create_token("token_a", "A", &mut runner, &mut signer);
     let token_b = create_token("token_b", "B", &mut runner, &mut signer);
 
-    create_pool(
+    let pool = create_pool(
         token_a.0.address,
         token_b.0.address,
         &factory,
         &mut runner,
         &mut signer,
+    );
+
+    approve_erc20(
+        &token_a,
+        pool.0.address,
+        10_000.into(),
+        &mut signer,
+        &mut runner,
+    );
+    approve_erc20(
+        &token_b,
+        pool.0.address,
+        10_000.into(),
+        &mut signer,
+        &mut runner,
     );
 
     let token0 = std::cmp::min(token_a.0.address, token_b.0.address);
@@ -60,25 +75,44 @@ fn it_works() {
     panic!("{:?}", result);
 }
 
+fn approve_erc20(
+    token: &ERC20,
+    spender: Address,
+    amount: U256,
+    signer: &mut Signer,
+    runner: &mut AuroraRunner,
+) {
+    let result = runner
+        .submit_with_signer(signer, |nonce| token.approve(spender, amount, nonce))
+        .unwrap();
+    assert!(result.status, "Failed to approve ERC-20");
+}
+
 fn create_pool(
     token_a: Address,
     token_b: Address,
     factory: &Factory,
     runner: &mut test_utils::AuroraRunner,
     signer: &mut Signer,
-) -> Address {
-    let nonce = signer.use_nonce();
-
-    let create_pool_tx = factory.create_pool(token_a, token_b, POOL_FEE.into(), nonce.into());
+) -> Pool {
     let result = runner
-        .submit_transaction(&signer.secret_key, create_pool_tx)
+        .submit_with_signer(signer, |nonce| {
+            factory.create_pool(token_a, token_b, POOL_FEE.into(), nonce)
+        })
         .unwrap();
     assert!(result.status, "Failed to create pool");
 
     let mut address = [0u8; 20];
     address.copy_from_slice(&result.result[12..]);
+    let pool = Pool::from_address(Address(address));
 
-    Address(address)
+    // https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/libraries/TickMath.sol#L14
+    let result = runner
+        .submit_with_signer(signer, |nonce| pool.initialize(u64::MAX, nonce))
+        .unwrap();
+    assert!(result.status, "Failed to initialize pool");
+
+    pool
 }
 
 fn create_token(

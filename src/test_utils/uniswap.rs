@@ -9,6 +9,8 @@ pub(crate) struct FactoryConstructor(pub solidity::ContractConstructor);
 
 pub(crate) struct Factory(pub solidity::DeployedContract);
 
+pub(crate) struct Pool(pub solidity::DeployedContract);
+
 pub(crate) struct PositionManagerConstructor(pub solidity::ContractConstructor);
 
 pub(crate) struct PositionManager(pub solidity::DeployedContract);
@@ -134,6 +136,49 @@ impl Factory {
                 ethabi::Token::Address(token_b),
                 ethabi::Token::Uint(fee),
             ])
+            .unwrap();
+
+        LegacyEthTransaction {
+            nonce,
+            gas_price: Default::default(),
+            gas: u64::MAX.into(),
+            to: Some(self.0.address),
+            value: Default::default(),
+            data,
+        }
+    }
+}
+
+impl Pool {
+    pub fn from_address(address: Address) -> Self {
+        let artifact_path = uniswap_root_path().join(
+            [
+                "node_modules",
+                "@uniswap",
+                "v3-core",
+                "artifacts",
+                "contracts",
+                "UniswapV3Pool.sol",
+                "UniswapV3Pool.json",
+            ]
+            .iter()
+            .collect::<PathBuf>(),
+        );
+        let constructor = load_constructor(artifact_path);
+
+        Self(solidity::DeployedContract {
+            abi: constructor.abi,
+            address,
+        })
+    }
+
+    pub fn initialize(&self, price: u64, nonce: U256) -> LegacyEthTransaction {
+        let data = self
+            .0
+            .abi
+            .function("initialize")
+            .unwrap()
+            .encode_input(&[ethabi::Token::Uint(price.into())])
             .unwrap();
 
         LegacyEthTransaction {
