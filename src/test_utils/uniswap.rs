@@ -16,6 +16,10 @@ pub(crate) struct PositionManagerConstructor(pub solidity::ContractConstructor);
 
 pub(crate) struct PositionManager(pub solidity::DeployedContract);
 
+pub(crate) struct SwapRouterConstructor(pub solidity::ContractConstructor);
+
+pub(crate) struct SwapRouter(pub solidity::DeployedContract);
+
 pub(crate) struct MintParams {
     pub token0: Address,
     pub token1: Address,
@@ -38,6 +42,12 @@ impl From<FactoryConstructor> for solidity::ContractConstructor {
 
 impl From<PositionManagerConstructor> for solidity::ContractConstructor {
     fn from(c: PositionManagerConstructor) -> Self {
+        c.0
+    }
+}
+
+impl From<SwapRouterConstructor> for solidity::ContractConstructor {
+    fn from(c: SwapRouterConstructor) -> Self {
         c.0
     }
 }
@@ -234,6 +244,95 @@ impl PositionManager {
             y.not().overflowing_add(U256::one()).0
         } else {
             y
+        }
+    }
+}
+
+impl SwapRouterConstructor {
+    pub fn load() -> Self {
+        let artifact_path = uniswap_root_path().join(
+            [
+                "node_modules",
+                "@uniswap",
+                "v3-periphery",
+                "artifacts",
+                "contracts",
+                "SwapRouter.sol",
+                "SwapRouter.json",
+            ]
+            .iter()
+            .collect::<PathBuf>(),
+        );
+
+        Self(load_constructor(artifact_path))
+    }
+
+    pub fn deploy(
+        &self,
+        factory: Address,
+        wrapped_eth: Address,
+        nonce: U256,
+    ) -> LegacyEthTransaction {
+        let data = self
+            .0
+            .abi
+            .constructor()
+            .unwrap()
+            .encode_input(
+                self.0.code.clone(),
+                &[
+                    ethabi::Token::Address(factory),
+                    ethabi::Token::Address(wrapped_eth),
+                ],
+            )
+            .unwrap();
+        LegacyEthTransaction {
+            nonce,
+            gas_price: Default::default(),
+            gas: u64::MAX.into(),
+            to: None,
+            value: Default::default(),
+            data,
+        }
+    }
+}
+
+pub struct SwapParams {
+    pub token_in: Address,
+    pub token_out: Address,
+    pub fee: u64,
+    pub recipient: Address,
+    pub deadline: U256,
+    pub amount_out: U256,
+    pub amount_in_max: U256,
+    pub price_limit: U256,
+}
+
+impl SwapRouter {
+    pub fn swap(&self, params: SwapParams, nonce: U256) -> LegacyEthTransaction {
+        let data = self
+            .0
+            .abi
+            .function("exactOutputSingle")
+            .unwrap()
+            .encode_input(&[ethabi::Token::Tuple(vec![
+                ethabi::Token::Address(params.token_in),
+                ethabi::Token::Address(params.token_out),
+                ethabi::Token::Uint(params.fee.into()),
+                ethabi::Token::Address(params.recipient),
+                ethabi::Token::Uint(params.amount_out),
+                ethabi::Token::Uint(params.amount_in_max),
+                ethabi::Token::Uint(params.price_limit),
+            ])])
+            .unwrap();
+
+        LegacyEthTransaction {
+            nonce,
+            gas_price: Default::default(),
+            gas: u64::MAX.into(),
+            to: Some(self.0.address),
+            value: Default::default(),
+            data,
         }
     }
 }

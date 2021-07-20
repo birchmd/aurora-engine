@@ -4,6 +4,7 @@ use crate::test_utils::{
     erc20::{ERC20Constructor, ERC20},
     uniswap::{
         Factory, FactoryConstructor, MintParams, Pool, PositionManager, PositionManagerConstructor,
+        SwapParams, SwapRouter, SwapRouterConstructor,
     },
     AuroraRunner, Signer,
 };
@@ -19,10 +20,15 @@ const POOL_FEE: u64 = 500;
 
 #[test]
 fn it_works() {
-    let (mut runner, mut signer, factory, manager) = initialize_uniswap_factory();
+    let (mut runner, mut signer, factory, weth_address, manager) = initialize_uniswap_factory();
 
     let token_a = create_token("token_a", "A", &mut runner, &mut signer);
     let token_b = create_token("token_b", "B", &mut runner, &mut signer);
+    let (token_a, token_b) = if token_a.0.address < token_b.0.address {
+        (token_a, token_b)
+    } else {
+        (token_b, token_a)
+    };
 
     let _pool = create_pool(
         token_a.0.address,
@@ -32,14 +38,50 @@ fn it_works() {
         &mut signer,
     );
 
-    let result = add_equal_liquidity(
+    let _result = add_equal_liquidity(
         &manager,
-        10_000.into(),
+        500_000.into(),
         &token_a,
         &token_b,
         &mut runner,
         &mut signer,
     );
+
+    let nonce = signer.use_nonce();
+    let swap_router = SwapRouter(runner.deploy_contract(
+        &signer.secret_key,
+        |c| c.deploy(factory.0.address, weth_address, nonce.into()),
+        SwapRouterConstructor::load(),
+    ));
+
+    approve_erc20(
+        &token_a,
+        swap_router.0.address,
+        U256::MAX,
+        &mut signer,
+        &mut runner,
+    );
+    approve_erc20(
+        &token_b,
+        swap_router.0.address,
+        U256::MAX,
+        &mut signer,
+        &mut runner,
+    );
+
+    let params = SwapParams {
+        token_in: token_a.0.address,
+        token_out: token_b.0.address,
+        fee: POOL_FEE,
+        recipient: Address([0; 20]),
+        deadline: U256::MAX,
+        amount_out: 1000.into(),
+        amount_in_max: 100_000.into(),
+        price_limit: U256::zero(),
+    };
+    let result = runner
+        .submit_with_signer(&mut signer, |nonce| swap_router.swap(params, nonce))
+        .unwrap();
 
     panic!("{:?}", result);
 }
@@ -176,7 +218,13 @@ fn create_token(
     contract
 }
 
-fn initialize_uniswap_factory() -> (test_utils::AuroraRunner, Signer, Factory, PositionManager) {
+fn initialize_uniswap_factory() -> (
+    test_utils::AuroraRunner,
+    Signer,
+    Factory,
+    Address,
+    PositionManager,
+) {
     // set up Aurora runner and accounts
     let mut runner = test_utils::deploy_evm();
     let mut rng = rand::thread_rng();
@@ -218,5 +266,5 @@ fn initialize_uniswap_factory() -> (test_utils::AuroraRunner, Signer, Factory, P
         manager_constructor,
     ));
 
-    (runner, signer, factory, manager)
+    (runner, signer, factory, wrapped_eth.0.address, manager)
 }
