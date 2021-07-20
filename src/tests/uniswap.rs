@@ -32,46 +32,78 @@ fn it_works() {
         &mut signer,
     );
 
-    approve_erc20(
+    let result = add_equal_liquidity(
+        &manager,
+        10_000.into(),
         &token_a,
-        manager.0.address,
-        U256::MAX,
-        &mut signer,
-        &mut runner,
-    );
-    approve_erc20(
         &token_b,
-        manager.0.address,
-        U256::MAX,
-        &mut signer,
         &mut runner,
+        &mut signer,
     );
+
+    panic!("{:?}", result);
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+struct LiquidityResult {
+    token_id: U256,
+    liquidity: U256,
+    amount0: U256,
+    amount1: U256,
+}
+
+fn add_equal_liquidity(
+    manager: &PositionManager,
+    amount: U256,
+    token_a: &ERC20,
+    token_b: &ERC20,
+    runner: &mut AuroraRunner,
+    signer: &mut Signer,
+) -> LiquidityResult {
+    approve_erc20(token_a, manager.0.address, U256::MAX, signer, runner);
+    approve_erc20(token_b, manager.0.address, U256::MAX, signer, runner);
 
     let token0 = std::cmp::min(token_a.0.address, token_b.0.address);
     let token1 = std::cmp::max(token_a.0.address, token_b.0.address);
 
-    let nonce = signer.use_nonce();
-    let add_liquidity_tx = manager.mint(
-        MintParams {
-            token0,
-            token1,
-            fee: POOL_FEE.into(),
-            tick_lower: -1000,
-            tick_upper: 1000,
-            amount0_desired: 10_00.into(),
-            amount1_desired: 10_00.into(),
-            amount0_min: U256::one(),
-            amount1_min: U256::one(),
-            recipient: test_utils::address_from_secret_key(&signer.secret_key),
-            deadline: U256::MAX, // no deadline
-        },
-        nonce.into(),
-    );
-    let result = runner
-        .submit_transaction(&signer.secret_key, add_liquidity_tx)
-        .unwrap();
+    let params = MintParams {
+        token0,
+        token1,
+        fee: POOL_FEE.into(),
+        tick_lower: -1000,
+        tick_upper: 1000,
+        amount0_desired: amount,
+        amount1_desired: amount,
+        amount0_min: U256::one(),
+        amount1_min: U256::one(),
+        recipient: test_utils::address_from_secret_key(&signer.secret_key),
+        deadline: U256::MAX, // no deadline
+    };
 
-    panic!("{:?}", result);
+    let result = runner
+        .submit_with_signer(signer, |nonce| manager.mint(params, nonce))
+        .unwrap();
+    assert!(result.status);
+
+    let result = {
+        let mut values = [U256::zero(); 4];
+        for i in 0..4 {
+            let lower = i * 32;
+            let upper = (i + 1) * 32;
+            let value = U256::from_big_endian(&result.result[lower..upper]);
+            values[i] = value;
+        }
+        LiquidityResult {
+            token_id: values[0],
+            liquidity: values[1],
+            amount0: values[2],
+            amount1: values[3],
+        }
+    };
+    assert_eq!(result.amount0, amount);
+    assert_eq!(result.amount1, amount);
+
+    result
 }
 
 fn approve_erc20(
