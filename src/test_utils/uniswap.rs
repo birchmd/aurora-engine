@@ -1,6 +1,7 @@
 use crate::prelude::{Address, U256};
 use crate::test_utils::solidity;
 use crate::transaction::LegacyEthTransaction;
+use std::ops::Not;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Once;
@@ -172,13 +173,13 @@ impl Pool {
         })
     }
 
-    pub fn initialize(&self, price: u64, nonce: U256) -> LegacyEthTransaction {
+    pub fn initialize(&self, price: U256, nonce: U256) -> LegacyEthTransaction {
         let data = self
             .0
             .abi
             .function("initialize")
             .unwrap()
-            .encode_input(&[ethabi::Token::Uint(price.into())])
+            .encode_input(&[ethabi::Token::Uint(price)])
             .unwrap();
 
         LegacyEthTransaction {
@@ -194,8 +195,8 @@ impl Pool {
 
 impl PositionManager {
     pub fn mint(&self, params: MintParams, nonce: U256) -> LegacyEthTransaction {
-        let tick_lower = U256::from(u64::from_le_bytes(params.tick_lower.to_le_bytes()));
-        let tick_upper = U256::from(u64::from_le_bytes(params.tick_upper.to_le_bytes()));
+        let tick_lower = Self::i64_to_u256(params.tick_lower);
+        let tick_upper = Self::i64_to_u256(params.tick_upper);
         let data = self
             .0
             .abi
@@ -223,6 +224,16 @@ impl PositionManager {
             to: Some(self.0.address),
             value: Default::default(),
             data,
+        }
+    }
+
+    fn i64_to_u256(x: i64) -> U256 {
+        let y = U256::from(x.abs());
+        if x < 0 {
+            // compute two's complement to get negative number
+            y.not().overflowing_add(U256::one()).0
+        } else {
+            y
         }
     }
 }

@@ -24,7 +24,7 @@ fn it_works() {
     let token_a = create_token("token_a", "A", &mut runner, &mut signer);
     let token_b = create_token("token_b", "B", &mut runner, &mut signer);
 
-    let pool = create_pool(
+    let _pool = create_pool(
         token_a.0.address,
         token_b.0.address,
         &factory,
@@ -34,15 +34,15 @@ fn it_works() {
 
     approve_erc20(
         &token_a,
-        pool.0.address,
-        10_000.into(),
+        manager.0.address,
+        U256::MAX,
         &mut signer,
         &mut runner,
     );
     approve_erc20(
         &token_b,
-        pool.0.address,
-        10_000.into(),
+        manager.0.address,
+        U256::MAX,
         &mut signer,
         &mut runner,
     );
@@ -56,11 +56,10 @@ fn it_works() {
             token0,
             token1,
             fee: POOL_FEE.into(),
-            // https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/libraries/TickMath.sol#L9
-            tick_lower: -887272,
-            tick_upper: 887272,
-            amount0_desired: 100.into(),
-            amount1_desired: 100.into(),
+            tick_lower: -1000,
+            tick_upper: 1000,
+            amount0_desired: 10_00.into(),
+            amount1_desired: 10_00.into(),
             amount0_min: U256::one(),
             amount1_min: U256::one(),
             recipient: test_utils::address_from_secret_key(&signer.secret_key),
@@ -106,9 +105,11 @@ fn create_pool(
     address.copy_from_slice(&result.result[12..]);
     let pool = Pool::from_address(Address(address));
 
-    // https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/libraries/TickMath.sol#L14
+    // 2^96 corresponds to a price ratio of 1
     let result = runner
-        .submit_with_signer(signer, |nonce| pool.initialize(u64::MAX, nonce))
+        .submit_with_signer(signer, |nonce| {
+            pool.initialize(U256::from(2).pow(U256::from(96)), nonce)
+        })
         .unwrap();
     assert!(result.status, "Failed to initialize pool");
 

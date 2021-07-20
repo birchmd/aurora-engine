@@ -326,6 +326,8 @@ impl AuroraRunner {
 impl Default for AuroraRunner {
     fn default() -> Self {
         let aurora_account_id = "aurora".to_string();
+        let mut wasm_config: VMConfig = Default::default();
+        wasm_config.limit_config.max_gas_burnt = u64::MAX;
         Self {
             aurora_account_id: aurora_account_id.clone(),
             chain_id: 1313161556, // NEAR betanet
@@ -350,7 +352,7 @@ impl Default for AuroraRunner {
                 is_view: false,
                 output_data_receivers: vec![],
             },
-            wasm_config: Default::default(),
+            wasm_config,
             fees_config: Default::default(),
             current_protocol_version: u32::MAX,
             profile: Default::default(),
