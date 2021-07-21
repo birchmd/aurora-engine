@@ -31,19 +31,19 @@ fn test_uniswap_exact_output() {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-struct LiquidityResult {
-    token_id: U256,
-    liquidity: U256,
-    amount0: U256,
-    amount1: U256,
+pub(crate) struct LiquidityResult {
+    pub token_id: U256,
+    pub liquidity: U256,
+    pub amount0: U256,
+    pub amount1: U256,
 }
 
-struct UniswapTestContext {
-    factory: Factory,
-    manager: PositionManager,
-    swap_router: SwapRouter,
-    signer: Signer,
-    runner: AuroraRunner,
+pub(crate) struct UniswapTestContext {
+    pub factory: Factory,
+    pub manager: PositionManager,
+    pub swap_router: SwapRouter,
+    pub signer: Signer,
+    pub runner: AuroraRunner,
 }
 
 impl UniswapTestContext {
