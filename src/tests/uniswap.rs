@@ -3,8 +3,8 @@ use crate::test_utils::{
     self,
     erc20::{ERC20Constructor, ERC20},
     uniswap::{
-        Factory, FactoryConstructor, MintParams, Pool, PositionManager, PositionManagerConstructor,
-        SwapParams, SwapRouter, SwapRouterConstructor,
+        ExactOutputSingleParams, Factory, FactoryConstructor, MintParams, Pool, PositionManager,
+        PositionManagerConstructor, SwapRouter, SwapRouterConstructor,
     },
     AuroraRunner, Signer,
 };
@@ -17,9 +17,10 @@ const INITIAL_NONCE: u64 = 0;
 // The "fee" can only be specific values, see
 // https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/UniswapV3Factory.sol#L26
 const POOL_FEE: u64 = 500;
+const OUTPUT_AMOUNT: u64 = 1001;
 
 #[test]
-fn it_works() {
+fn test_uniswap_exact_output() {
     let (mut runner, mut signer, factory, weth_address, manager) = initialize_uniswap_factory();
 
     let token_a = create_token("token_a", "A", &mut runner, &mut signer);
@@ -69,21 +70,25 @@ fn it_works() {
         &mut runner,
     );
 
-    let params = SwapParams {
+    let amount_out = U256::from(OUTPUT_AMOUNT);
+    let params = ExactOutputSingleParams {
         token_in: token_a.0.address,
         token_out: token_b.0.address,
         fee: POOL_FEE,
         recipient: Address([0; 20]),
         deadline: U256::MAX,
-        amount_out: 1000.into(),
-        amount_in_max: 100_000.into(),
+        amount_out,
+        amount_in_max: U256::from(100) * amount_out,
         price_limit: U256::zero(),
     };
     let result = runner
-        .submit_with_signer(&mut signer, |nonce| swap_router.swap(params, nonce))
+        .submit_with_signer(&mut signer, |nonce| {
+            swap_router.exact_output_single(params, nonce)
+        })
         .unwrap();
 
-    panic!("{:?}", result);
+    let amount_in = U256::from_big_endian(&result.result);
+    assert!(amount_in >= amount_out);
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

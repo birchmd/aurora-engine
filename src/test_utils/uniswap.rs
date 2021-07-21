@@ -297,7 +297,7 @@ impl SwapRouterConstructor {
     }
 }
 
-pub struct SwapParams {
+pub struct ExactOutputSingleParams {
     pub token_in: Address,
     pub token_out: Address,
     pub fee: u64,
@@ -309,7 +309,11 @@ pub struct SwapParams {
 }
 
 impl SwapRouter {
-    pub fn swap(&self, params: SwapParams, nonce: U256) -> LegacyEthTransaction {
+    pub fn exact_output_single(
+        &self,
+        params: ExactOutputSingleParams,
+        nonce: U256,
+    ) -> LegacyEthTransaction {
         let data = self
             .0
             .abi
@@ -320,6 +324,7 @@ impl SwapRouter {
                 ethabi::Token::Address(params.token_out),
                 ethabi::Token::Uint(params.fee.into()),
                 ethabi::Token::Address(params.recipient),
+                ethabi::Token::Uint(params.deadline),
                 ethabi::Token::Uint(params.amount_out),
                 ethabi::Token::Uint(params.amount_in_max),
                 ethabi::Token::Uint(params.price_limit),
