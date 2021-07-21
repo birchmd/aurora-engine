@@ -148,19 +148,11 @@ impl UniswapTestContext {
         pool
     }
 
-    pub fn add_equal_liquidity(
-        &mut self,
-        amount: U256,
-        token_a: &ERC20,
-        token_b: &ERC20,
-    ) -> LiquidityResult {
-        self.approve_erc20(token_a, self.manager.0.address, U256::MAX);
-        self.approve_erc20(token_b, self.manager.0.address, U256::MAX);
-
+    pub fn mint_params(&self, amount: U256, token_a: &ERC20, token_b: &ERC20) -> MintParams {
         let token0 = std::cmp::min(token_a.0.address, token_b.0.address);
         let token1 = std::cmp::max(token_a.0.address, token_b.0.address);
 
-        let params = MintParams {
+        MintParams {
             token0,
             token1,
             fee: POOL_FEE.into(),
@@ -172,7 +164,19 @@ impl UniswapTestContext {
             amount1_min: U256::one(),
             recipient: test_utils::address_from_secret_key(&self.signer.secret_key),
             deadline: U256::MAX, // no deadline
-        };
+        }
+    }
+
+    pub fn add_equal_liquidity(
+        &mut self,
+        amount: U256,
+        token_a: &ERC20,
+        token_b: &ERC20,
+    ) -> LiquidityResult {
+        self.approve_erc20(token_a, self.manager.0.address, U256::MAX);
+        self.approve_erc20(token_b, self.manager.0.address, U256::MAX);
+
+        let params = self.mint_params(amount, token_a, token_b);
 
         let manager = &self.manager;
         let result = self
@@ -202,6 +206,24 @@ impl UniswapTestContext {
         result
     }
 
+    pub fn exact_output_single_params(
+        &self,
+        amount_out: U256,
+        token_in: &ERC20,
+        token_out: &ERC20,
+    ) -> ExactOutputSingleParams {
+        ExactOutputSingleParams {
+            token_in: token_in.0.address,
+            token_out: token_out.0.address,
+            fee: POOL_FEE,
+            recipient: Address([0; 20]),
+            deadline: U256::MAX,
+            amount_out,
+            amount_in_max: U256::from(100) * amount_out,
+            price_limit: U256::zero(),
+        }
+    }
+
     pub fn exact_output_single(
         &mut self,
         token_in: &ERC20,
@@ -211,16 +233,7 @@ impl UniswapTestContext {
         self.approve_erc20(&token_in, self.swap_router.0.address, U256::MAX);
         self.approve_erc20(&token_out, self.swap_router.0.address, U256::MAX);
 
-        let params = ExactOutputSingleParams {
-            token_in: token_in.0.address,
-            token_out: token_out.0.address,
-            fee: POOL_FEE,
-            recipient: Address([0; 20]),
-            deadline: U256::MAX,
-            amount_out,
-            amount_in_max: U256::from(100) * amount_out,
-            price_limit: U256::zero(),
-        };
+        let params = self.exact_output_single_params(amount_out, token_in, token_out);
         let swap_router = &self.swap_router;
         let result = self
             .runner
@@ -228,6 +241,7 @@ impl UniswapTestContext {
                 swap_router.exact_output_single(params, nonce)
             })
             .unwrap();
+        assert!(result.status, "Swap failed");
 
         let amount_in = U256::from_big_endian(&result.result);
         assert!(amount_in >= amount_out);
@@ -235,7 +249,7 @@ impl UniswapTestContext {
         amount_in
     }
 
-    fn approve_erc20(&mut self, token: &ERC20, spender: Address, amount: U256) {
+    pub fn approve_erc20(&mut self, token: &ERC20, spender: Address, amount: U256) {
         let result = self
             .runner
             .submit_with_signer(&mut self.signer, |nonce| {
