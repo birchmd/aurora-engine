@@ -17,14 +17,16 @@ const INITIAL_NONCE: u64 = 0;
 // The "fee" can only be specific values, see
 // https://github.com/Uniswap/uniswap-v3-core/blob/main/contracts/UniswapV3Factory.sol#L26
 const POOL_FEE: u64 = 500;
-const OUTPUT_AMOUNT: u64 = 1001;
+const MINT_AMOUNT: u64 = 1_000_000_000;
+const LIQUIDITY_AMOUNT: u64 = MINT_AMOUNT / 2;
+const OUTPUT_AMOUNT: u64 = LIQUIDITY_AMOUNT / 100;
 
 #[test]
 fn test_uniswap_exact_output() {
     let mut context = UniswapTestContext::new();
-    let (token_a, token_b) = context.create_token_pair();
+    let (token_a, token_b) = context.create_token_pair(MINT_AMOUNT.into());
     let _pool = context.create_pool(&token_a, &token_b);
-    let _result = context.add_equal_liquidity(500_000.into(), &token_a, &token_b);
+    let _result = context.add_equal_liquidity(LIQUIDITY_AMOUNT.into(), &token_a, &token_b);
     let _amount_in = context.exact_output_single(&token_a, &token_b, OUTPUT_AMOUNT.into());
 }
 
@@ -68,8 +70,13 @@ impl UniswapTestContext {
             FactoryConstructor::load(),
         ));
 
-        let wrapped_eth =
-            Self::create_token_with_runner("Wrapped Ether", "WETH", &mut runner, &mut signer);
+        let wrapped_eth = Self::create_token_with_runner(
+            "Wrapped Ether",
+            "WETH",
+            U256::MAX,
+            &mut runner,
+            &mut signer,
+        );
         let weth_address = wrapped_eth.0.address;
 
         let nonce = signer.use_nonce();
@@ -102,9 +109,9 @@ impl UniswapTestContext {
         }
     }
 
-    pub fn create_token_pair(&mut self) -> (ERC20, ERC20) {
-        let token_a = self.create_token("token_a", "A");
-        let token_b = self.create_token("token_b", "B");
+    pub fn create_token_pair(&mut self, mint_amount: U256) -> (ERC20, ERC20) {
+        let token_a = self.create_token("token_a", "A", mint_amount);
+        let token_b = self.create_token("token_b", "B", mint_amount);
 
         if token_a.0.address < token_b.0.address {
             (token_a, token_b)
@@ -238,13 +245,20 @@ impl UniswapTestContext {
         assert!(result.status, "Failed to approve ERC-20");
     }
 
-    fn create_token(&mut self, name: &str, symbol: &str) -> ERC20 {
-        Self::create_token_with_runner(name, symbol, &mut self.runner, &mut self.signer)
+    fn create_token(&mut self, name: &str, symbol: &str, mint_amount: U256) -> ERC20 {
+        Self::create_token_with_runner(
+            name,
+            symbol,
+            mint_amount,
+            &mut self.runner,
+            &mut self.signer,
+        )
     }
 
     fn create_token_with_runner(
         name: &str,
         symbol: &str,
+        mint_amount: U256,
         runner: &mut AuroraRunner,
         signer: &mut Signer,
     ) -> ERC20 {
@@ -258,7 +272,7 @@ impl UniswapTestContext {
         let nonce = signer.use_nonce();
         let mint_tx = contract.mint(
             test_utils::address_from_secret_key(&signer.secret_key),
-            1_000_000.into(),
+            mint_amount,
             nonce.into(),
         );
         let result = runner
