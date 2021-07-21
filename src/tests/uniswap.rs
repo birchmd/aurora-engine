@@ -21,74 +21,11 @@ const OUTPUT_AMOUNT: u64 = 1001;
 
 #[test]
 fn test_uniswap_exact_output() {
-    let (mut runner, mut signer, factory, weth_address, manager) = initialize_uniswap_factory();
-
-    let token_a = create_token("token_a", "A", &mut runner, &mut signer);
-    let token_b = create_token("token_b", "B", &mut runner, &mut signer);
-    let (token_a, token_b) = if token_a.0.address < token_b.0.address {
-        (token_a, token_b)
-    } else {
-        (token_b, token_a)
-    };
-
-    let _pool = create_pool(
-        token_a.0.address,
-        token_b.0.address,
-        &factory,
-        &mut runner,
-        &mut signer,
-    );
-
-    let _result = add_equal_liquidity(
-        &manager,
-        500_000.into(),
-        &token_a,
-        &token_b,
-        &mut runner,
-        &mut signer,
-    );
-
-    let nonce = signer.use_nonce();
-    let swap_router = SwapRouter(runner.deploy_contract(
-        &signer.secret_key,
-        |c| c.deploy(factory.0.address, weth_address, nonce.into()),
-        SwapRouterConstructor::load(),
-    ));
-
-    approve_erc20(
-        &token_a,
-        swap_router.0.address,
-        U256::MAX,
-        &mut signer,
-        &mut runner,
-    );
-    approve_erc20(
-        &token_b,
-        swap_router.0.address,
-        U256::MAX,
-        &mut signer,
-        &mut runner,
-    );
-
-    let amount_out = U256::from(OUTPUT_AMOUNT);
-    let params = ExactOutputSingleParams {
-        token_in: token_a.0.address,
-        token_out: token_b.0.address,
-        fee: POOL_FEE,
-        recipient: Address([0; 20]),
-        deadline: U256::MAX,
-        amount_out,
-        amount_in_max: U256::from(100) * amount_out,
-        price_limit: U256::zero(),
-    };
-    let result = runner
-        .submit_with_signer(&mut signer, |nonce| {
-            swap_router.exact_output_single(params, nonce)
-        })
-        .unwrap();
-
-    let amount_in = U256::from_big_endian(&result.result);
-    assert!(amount_in >= amount_out);
+    let mut context = UniswapTestContext::new();
+    let (token_a, token_b) = context.create_token_pair();
+    let _pool = context.create_pool(&token_a, &token_b);
+    let _result = context.add_equal_liquidity(500_000.into(), &token_a, &token_b);
+    let _amount_in = context.exact_output_single(&token_a, &token_b, OUTPUT_AMOUNT.into());
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -99,177 +36,236 @@ struct LiquidityResult {
     amount1: U256,
 }
 
-fn add_equal_liquidity(
-    manager: &PositionManager,
-    amount: U256,
-    token_a: &ERC20,
-    token_b: &ERC20,
-    runner: &mut AuroraRunner,
-    signer: &mut Signer,
-) -> LiquidityResult {
-    approve_erc20(token_a, manager.0.address, U256::MAX, signer, runner);
-    approve_erc20(token_b, manager.0.address, U256::MAX, signer, runner);
+struct UniswapTestContext {
+    factory: Factory,
+    manager: PositionManager,
+    swap_router: SwapRouter,
+    signer: Signer,
+    runner: AuroraRunner,
+}
 
-    let token0 = std::cmp::min(token_a.0.address, token_b.0.address);
-    let token1 = std::cmp::max(token_a.0.address, token_b.0.address);
+impl UniswapTestContext {
+    pub fn new() -> Self {
+        let mut runner = test_utils::deploy_evm();
+        let mut rng = rand::thread_rng();
+        let source_account = SecretKey::random(&mut rng);
+        let source_address = test_utils::address_from_secret_key(&source_account);
+        runner.create_address(
+            source_address,
+            Wei::new_u64(INITIAL_BALANCE),
+            INITIAL_NONCE.into(),
+        );
 
-    let params = MintParams {
-        token0,
-        token1,
-        fee: POOL_FEE.into(),
-        tick_lower: -1000,
-        tick_upper: 1000,
-        amount0_desired: amount,
-        amount1_desired: amount,
-        amount0_min: U256::one(),
-        amount1_min: U256::one(),
-        recipient: test_utils::address_from_secret_key(&signer.secret_key),
-        deadline: U256::MAX, // no deadline
-    };
+        let mut signer = Signer {
+            nonce: INITIAL_NONCE,
+            secret_key: source_account,
+        };
 
-    let result = runner
-        .submit_with_signer(signer, |nonce| manager.mint(params, nonce))
-        .unwrap();
-    assert!(result.status);
+        let nonce = signer.use_nonce();
+        let factory = Factory(runner.deploy_contract(
+            &signer.secret_key,
+            |c| c.deploy(nonce.into()),
+            FactoryConstructor::load(),
+        ));
 
-    let result = {
-        let mut values = [U256::zero(); 4];
-        for i in 0..4 {
-            let lower = i * 32;
-            let upper = (i + 1) * 32;
-            let value = U256::from_big_endian(&result.result[lower..upper]);
-            values[i] = value;
+        let wrapped_eth =
+            Self::create_token_with_runner("Wrapped Ether", "WETH", &mut runner, &mut signer);
+        let weth_address = wrapped_eth.0.address;
+
+        let nonce = signer.use_nonce();
+        let manager = PositionManager(runner.deploy_contract(
+            &signer.secret_key,
+            |c| {
+                c.deploy(
+                    factory.0.address,
+                    weth_address,
+                    Address([0; 20]),
+                    nonce.into(),
+                )
+            },
+            PositionManagerConstructor::load(),
+        ));
+
+        let nonce = signer.use_nonce();
+        let swap_router = SwapRouter(runner.deploy_contract(
+            &signer.secret_key,
+            |c| c.deploy(factory.0.address, weth_address, nonce.into()),
+            SwapRouterConstructor::load(),
+        ));
+
+        Self {
+            factory,
+            manager,
+            swap_router,
+            signer,
+            runner,
         }
-        LiquidityResult {
-            token_id: values[0],
-            liquidity: values[1],
-            amount0: values[2],
-            amount1: values[3],
+    }
+
+    pub fn create_token_pair(&mut self) -> (ERC20, ERC20) {
+        let token_a = self.create_token("token_a", "A");
+        let token_b = self.create_token("token_b", "B");
+
+        if token_a.0.address < token_b.0.address {
+            (token_a, token_b)
+        } else {
+            (token_b, token_a)
         }
-    };
-    assert_eq!(result.amount0, amount);
-    assert_eq!(result.amount1, amount);
+    }
 
-    result
-}
+    pub fn create_pool(&mut self, token_a: &ERC20, token_b: &ERC20) -> Pool {
+        let token_a = token_a.0.address;
+        let token_b = token_b.0.address;
+        let factory = &self.factory;
+        let result = self
+            .runner
+            .submit_with_signer(&mut self.signer, |nonce| {
+                factory.create_pool(token_a, token_b, POOL_FEE.into(), nonce)
+            })
+            .unwrap();
+        assert!(result.status, "Failed to create pool");
 
-fn approve_erc20(
-    token: &ERC20,
-    spender: Address,
-    amount: U256,
-    signer: &mut Signer,
-    runner: &mut AuroraRunner,
-) {
-    let result = runner
-        .submit_with_signer(signer, |nonce| token.approve(spender, amount, nonce))
-        .unwrap();
-    assert!(result.status, "Failed to approve ERC-20");
-}
+        let mut address = [0u8; 20];
+        address.copy_from_slice(&result.result[12..]);
+        let pool = Pool::from_address(Address(address));
 
-fn create_pool(
-    token_a: Address,
-    token_b: Address,
-    factory: &Factory,
-    runner: &mut test_utils::AuroraRunner,
-    signer: &mut Signer,
-) -> Pool {
-    let result = runner
-        .submit_with_signer(signer, |nonce| {
-            factory.create_pool(token_a, token_b, POOL_FEE.into(), nonce)
-        })
-        .unwrap();
-    assert!(result.status, "Failed to create pool");
+        // 2^96 corresponds to a price ratio of 1
+        let result = self
+            .runner
+            .submit_with_signer(&mut self.signer, |nonce| {
+                pool.initialize(U256::from(2).pow(U256::from(96)), nonce)
+            })
+            .unwrap();
+        assert!(result.status, "Failed to initialize pool");
 
-    let mut address = [0u8; 20];
-    address.copy_from_slice(&result.result[12..]);
-    let pool = Pool::from_address(Address(address));
+        pool
+    }
 
-    // 2^96 corresponds to a price ratio of 1
-    let result = runner
-        .submit_with_signer(signer, |nonce| {
-            pool.initialize(U256::from(2).pow(U256::from(96)), nonce)
-        })
-        .unwrap();
-    assert!(result.status, "Failed to initialize pool");
+    pub fn add_equal_liquidity(
+        &mut self,
+        amount: U256,
+        token_a: &ERC20,
+        token_b: &ERC20,
+    ) -> LiquidityResult {
+        self.approve_erc20(token_a, self.manager.0.address, U256::MAX);
+        self.approve_erc20(token_b, self.manager.0.address, U256::MAX);
 
-    pool
-}
+        let token0 = std::cmp::min(token_a.0.address, token_b.0.address);
+        let token1 = std::cmp::max(token_a.0.address, token_b.0.address);
 
-fn create_token(
-    name: &str,
-    symbol: &str,
-    runner: &mut test_utils::AuroraRunner,
-    signer: &mut Signer,
-) -> ERC20 {
-    let constructor = ERC20Constructor::load();
-    let nonce = signer.use_nonce();
-    let contract = ERC20(runner.deploy_contract(
-        &signer.secret_key,
-        |c| c.deploy(name, symbol, nonce.into()),
-        constructor,
-    ));
+        let params = MintParams {
+            token0,
+            token1,
+            fee: POOL_FEE.into(),
+            tick_lower: -1000,
+            tick_upper: 1000,
+            amount0_desired: amount,
+            amount1_desired: amount,
+            amount0_min: U256::one(),
+            amount1_min: U256::one(),
+            recipient: test_utils::address_from_secret_key(&self.signer.secret_key),
+            deadline: U256::MAX, // no deadline
+        };
 
-    let nonce = signer.use_nonce();
-    let mint_tx = contract.mint(
-        test_utils::address_from_secret_key(&signer.secret_key),
-        1_000_000.into(),
-        nonce.into(),
-    );
-    let result = runner
-        .submit_transaction(&signer.secret_key, mint_tx)
-        .unwrap();
-    assert!(result.status, "Minting ERC-20 tokens failed");
+        let manager = &self.manager;
+        let result = self
+            .runner
+            .submit_with_signer(&mut self.signer, |nonce| manager.mint(params, nonce))
+            .unwrap();
+        assert!(result.status);
 
-    contract
-}
+        let result = {
+            let mut values = [U256::zero(); 4];
+            for i in 0..4 {
+                let lower = i * 32;
+                let upper = (i + 1) * 32;
+                let value = U256::from_big_endian(&result.result[lower..upper]);
+                values[i] = value;
+            }
+            LiquidityResult {
+                token_id: values[0],
+                liquidity: values[1],
+                amount0: values[2],
+                amount1: values[3],
+            }
+        };
+        assert_eq!(result.amount0, amount);
+        assert_eq!(result.amount1, amount);
 
-fn initialize_uniswap_factory() -> (
-    test_utils::AuroraRunner,
-    Signer,
-    Factory,
-    Address,
-    PositionManager,
-) {
-    // set up Aurora runner and accounts
-    let mut runner = test_utils::deploy_evm();
-    let mut rng = rand::thread_rng();
-    let source_account = SecretKey::random(&mut rng);
-    let source_address = test_utils::address_from_secret_key(&source_account);
-    runner.create_address(
-        source_address,
-        Wei::new_u64(INITIAL_BALANCE),
-        INITIAL_NONCE.into(),
-    );
+        result
+    }
 
-    let mut signer = Signer {
-        nonce: INITIAL_NONCE,
-        secret_key: source_account,
-    };
+    pub fn exact_output_single(
+        &mut self,
+        token_in: &ERC20,
+        token_out: &ERC20,
+        amount_out: U256,
+    ) -> U256 {
+        self.approve_erc20(&token_in, self.swap_router.0.address, U256::MAX);
+        self.approve_erc20(&token_out, self.swap_router.0.address, U256::MAX);
 
-    let nonce = signer.use_nonce();
-    let factory_constructor = FactoryConstructor::load();
-    let factory = Factory(runner.deploy_contract(
-        &signer.secret_key,
-        |c| c.deploy(nonce.into()),
-        factory_constructor,
-    ));
+        let params = ExactOutputSingleParams {
+            token_in: token_in.0.address,
+            token_out: token_out.0.address,
+            fee: POOL_FEE,
+            recipient: Address([0; 20]),
+            deadline: U256::MAX,
+            amount_out,
+            amount_in_max: U256::from(100) * amount_out,
+            price_limit: U256::zero(),
+        };
+        let swap_router = &self.swap_router;
+        let result = self
+            .runner
+            .submit_with_signer(&mut self.signer, |nonce| {
+                swap_router.exact_output_single(params, nonce)
+            })
+            .unwrap();
 
-    let wrapped_eth = create_token("Wrapped Ether", "WETH", &mut runner, &mut signer);
+        let amount_in = U256::from_big_endian(&result.result);
+        assert!(amount_in >= amount_out);
 
-    let nonce = signer.use_nonce();
-    let manager_constructor = PositionManagerConstructor::load();
-    let manager = PositionManager(runner.deploy_contract(
-        &signer.secret_key,
-        |c| {
-            c.deploy(
-                factory.0.address,
-                wrapped_eth.0.address,
-                Address([0; 20]),
-                nonce.into(),
-            )
-        },
-        manager_constructor,
-    ));
+        amount_in
+    }
 
-    (runner, signer, factory, wrapped_eth.0.address, manager)
+    fn approve_erc20(&mut self, token: &ERC20, spender: Address, amount: U256) {
+        let result = self
+            .runner
+            .submit_with_signer(&mut self.signer, |nonce| {
+                token.approve(spender, amount, nonce)
+            })
+            .unwrap();
+        assert!(result.status, "Failed to approve ERC-20");
+    }
+
+    fn create_token(&mut self, name: &str, symbol: &str) -> ERC20 {
+        Self::create_token_with_runner(name, symbol, &mut self.runner, &mut self.signer)
+    }
+
+    fn create_token_with_runner(
+        name: &str,
+        symbol: &str,
+        runner: &mut AuroraRunner,
+        signer: &mut Signer,
+    ) -> ERC20 {
+        let nonce = signer.use_nonce();
+        let contract = ERC20(runner.deploy_contract(
+            &signer.secret_key,
+            |c| c.deploy(name, symbol, nonce.into()),
+            ERC20Constructor::load(),
+        ));
+
+        let nonce = signer.use_nonce();
+        let mint_tx = contract.mint(
+            test_utils::address_from_secret_key(&signer.secret_key),
+            1_000_000.into(),
+            nonce.into(),
+        );
+        let result = runner
+            .submit_transaction(&signer.secret_key, mint_tx)
+            .unwrap();
+        assert!(result.status, "Minting ERC-20 tokens failed");
+
+        contract
+    }
 }
