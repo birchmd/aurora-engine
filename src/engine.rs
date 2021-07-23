@@ -357,6 +357,7 @@ impl Engine {
             executor.transact_create(origin, value.raw(), input, gas_limit, access_list),
             address,
         );
+        sdk::profiling::exit_scope();
         let is_succeed = status.is_succeed();
         if let Err(e) = status.into_result() {
             Engine::increment_nonce(&origin);
@@ -393,10 +394,9 @@ impl Engine {
     ) -> EngineResult<SubmitResult> {
         let mut executor = self.make_executor(gas_limit);
 
-        let scope = sdk::profiling::Scope::new(1);
         let (status, result) =
             executor.transact_call(origin, contract, value.raw(), input, gas_limit, access_list);
-        drop(scope);
+        sdk::profiling::exit_scope();
 
         let is_succeed = status.is_succeed();
         if let Err(e) = status.into_result() {
@@ -444,6 +444,7 @@ impl Engine {
         let mut executor = self.make_executor(gas_limit);
         let (status, result) =
             executor.transact_call(origin, contract, value.raw(), input, gas_limit, Vec::new());
+        sdk::profiling::exit_scope();
         status.into_result()?;
         Ok(result)
     }
@@ -739,7 +740,6 @@ impl ApplyBackend for Engine {
         I: IntoIterator<Item = (H256, H256)>,
         L: IntoIterator<Item = Log>,
     {
-        let _scope = sdk::profiling::Scope::new(0);
         for apply in values {
             match apply {
                 Apply::Modify {

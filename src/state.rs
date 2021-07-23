@@ -7,6 +7,7 @@ use crate::parameters::PromiseCreateArgs;
 use crate::prelude::{Vec, H160, H256, U256};
 use crate::types::Stack;
 use crate::AuroraState;
+use crate::sdk;
 
 pub struct AuroraStackState<'backend, 'config> {
     memory_stack_state: MemoryStackState<'backend, 'config, Engine>,
@@ -173,5 +174,13 @@ impl<'backend, 'config> StackState<'config> for AuroraStackState<'backend, 'conf
 
     fn touch(&mut self, address: H160) {
         self.memory_stack_state.touch(address)
+    }
+
+    fn enter_scope(&mut self, scope_id: u32) {
+        sdk::profiling::enter_scope(scope_id);
+    }
+
+    fn exit_scope(&mut self) {
+        sdk::profiling::exit_scope();
     }
 }

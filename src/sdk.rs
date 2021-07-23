@@ -189,17 +189,25 @@ pub mod profiling {
     pub struct Scope;
     impl Scope {
         pub fn new(scope_id: u32) -> Self {
-            unsafe {
-                super::exports::enter_scope(scope_id);
-            }
+            enter_scope(scope_id);
             Self
         }
     }
     impl core::ops::Drop for Scope {
         fn drop(&mut self) {
-            unsafe {
-                super::exports::exit_scope();
-            }
+            exit_scope();
+        }
+    }
+
+    pub fn enter_scope(scope_id: u32) {
+        unsafe {
+            super::exports::enter_scope(scope_id);
+        }
+    }
+
+    pub fn exit_scope() {
+        unsafe {
+            super::exports::exit_scope();
         }
     }
 }
