@@ -133,7 +133,7 @@ impl<'a> OneShotAuroraRunner<'a> {
             &[],
             self.base.current_protocol_version,
             Some(&self.base.cache),
-            &self.base.profile,
+            &Default::default(),
         )
     }
 }
@@ -188,6 +188,7 @@ impl AuroraRunner {
             input,
         );
 
+        self.profile = Default::default();
         let (maybe_outcome, maybe_error) = near_vm_runner::run(
             &self.code,
             method_name,
@@ -315,7 +316,7 @@ impl AuroraRunner {
             &[],
             self.current_protocol_version,
             Some(&self.cache),
-            &self.profile,
+            &Default::default(),
         );
         assert!(maybe_error.is_none());
         let bytes = outcome.unwrap().return_data.as_value().unwrap();

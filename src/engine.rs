@@ -392,8 +392,11 @@ impl Engine {
         access_list: Vec<(Address, Vec<H256>)>, // See EIP-2930
     ) -> EngineResult<SubmitResult> {
         let mut executor = self.make_executor(gas_limit);
+
+        let scope = sdk::profiling::Scope::new(1);
         let (status, result) =
             executor.transact_call(origin, contract, value.raw(), input, gas_limit, access_list);
+        drop(scope);
 
         let is_succeed = status.is_succeed();
         if let Err(e) = status.into_result() {
@@ -736,6 +739,7 @@ impl ApplyBackend for Engine {
         I: IntoIterator<Item = (H256, H256)>,
         L: IntoIterator<Item = Log>,
     {
+        let _scope = sdk::profiling::Scope::new(0);
         for apply in values {
             match apply {
                 Apply::Modify {

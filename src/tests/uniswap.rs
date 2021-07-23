@@ -26,8 +26,12 @@ fn test_uniswap_exact_output() {
     let mut context = UniswapTestContext::new();
     let (token_a, token_b) = context.create_token_pair(MINT_AMOUNT.into());
     let _pool = context.create_pool(&token_a, &token_b);
+
     let _result = context.add_equal_liquidity(LIQUIDITY_AMOUNT.into(), &token_a, &token_b);
+    println!("{:?}", context.runner.profile);
+
     let _amount_in = context.exact_output_single(&token_a, &token_b, OUTPUT_AMOUNT.into());
+    println!("{:?}", context.runner.profile);
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
