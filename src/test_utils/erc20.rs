@@ -1,3 +1,4 @@
+use crate::parameters::ViewCallArgs;
 use crate::prelude::{Address, U256};
 use crate::test_utils::solidity;
 use crate::transaction::LegacyEthTransaction;
@@ -115,7 +116,7 @@ impl ERC20 {
         }
     }
 
-    pub fn balance_of(&self, address: Address, nonce: U256) -> LegacyEthTransaction {
+    pub fn balance_of(&self, address: Address) -> ViewCallArgs {
         let data = self
             .0
             .abi
@@ -123,13 +124,11 @@ impl ERC20 {
             .unwrap()
             .encode_input(&[ethabi::Token::Address(address)])
             .unwrap();
-        LegacyEthTransaction {
-            nonce,
-            gas_price: Default::default(),
-            gas: u64::MAX.into(),
-            to: Some(self.0.address),
-            value: Default::default(),
-            data,
+        ViewCallArgs {
+            sender: [0; 20], // sender does not matter for balance call
+            address: self.0.address.0,
+            amount: [0; 32],
+            input: data,
         }
     }
 }

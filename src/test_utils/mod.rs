@@ -13,7 +13,7 @@ use rlp::RlpStream;
 use secp256k1::{self, Message, PublicKey, SecretKey};
 
 use crate::fungible_token::FungibleToken;
-use crate::parameters::{InitCallArgs, NewCallArgs, SubmitResult};
+use crate::parameters::{InitCallArgs, NewCallArgs, SubmitResult, ViewCallArgs};
 use crate::prelude::Address;
 use crate::storage;
 use crate::test_utils::solidity::{ContractConstructor, DeployedContract};
@@ -286,6 +286,17 @@ impl AuroraRunner {
         }
     }
 
+    pub fn view_call(&self, args: ViewCallArgs) -> Result<Vec<u8>, VMError> {
+        let input = args.try_to_vec().unwrap();
+        let (outcome, maybe_error) = self.one_shot().call("view", "VIEWER".to_string(), input);
+        if let Some(error) = maybe_error {
+            Err(error)
+        } else {
+            let bytes = outcome.unwrap().return_data.as_value().unwrap();
+            Ok(bytes)
+        }
+    }
+
     pub fn get_balance(&self, address: Address) -> types::Wei {
         types::Wei::new(self.getter_method_call("get_balance", address))
     }
@@ -297,24 +308,10 @@ impl AuroraRunner {
     // Used in `get_balance` and `get_nonce`. This function exists to avoid code duplication
     // since the contract's `get_nonce` and `get_balance` have the same type signature.
     fn getter_method_call(&self, method_name: &str, address: Address) -> U256 {
-        let mut context = self.context.clone();
-        Self::update_context(
-            &mut context,
-            "GETTER".to_string(),
+        let (outcome, maybe_error) = self.one_shot().call(
+            method_name,
             "GETTER".to_string(),
             address.as_bytes().to_vec(),
-        );
-        let (outcome, maybe_error) = near_vm_runner::run(
-            &self.code,
-            method_name,
-            &mut self.ext.clone(),
-            context,
-            &self.wasm_config,
-            &self.fees_config,
-            &[],
-            self.current_protocol_version,
-            Some(&self.cache),
-            &self.profile,
         );
         assert!(maybe_error.is_none());
         let bytes = outcome.unwrap().return_data.as_value().unwrap();
