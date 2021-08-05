@@ -1,13 +1,13 @@
-use crate::parameters::NewCallArgs;
+use crate::parameters::{InitCallArgs, NewCallArgs};
 use crate::prelude::U256;
 use crate::test_utils::{self, AuroraRunner};
 use crate::types;
+use crate::types::Wei;
 use borsh::BorshSerialize;
 use near_sdk_sim::{ExecutionResult, UserAccount};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use crate::types::Wei;
 
 #[test]
 fn test_state_migration() {
@@ -39,9 +39,11 @@ fn test_state_revert() {
     // create account
     let args = crate::parameters::WithdrawCallArgs {
         recipient_address: address.0,
-        amount: 1_000_000
+        amount: 1_000_000,
     };
-    aurora.call("mint_account", &args.try_to_vec().unwrap()).assert_success();
+    aurora
+        .call("mint_account", &args.try_to_vec().unwrap())
+        .assert_success();
 
     // confirm nonce is zero
     let x = aurora.call("get_nonce", &address.0);
@@ -53,8 +55,16 @@ fn test_state_revert() {
 
     // try operation that fails (transfer more eth than we have)
     let nonce = signer.use_nonce();
-    let tx = test_utils::transfer(crate::prelude::Address([0; 20]), Wei::new_u64(2_000_000), nonce.into());
-    let signed_tx = test_utils::sign_transaction(tx, Some(AuroraRunner::default().chain_id), &signer.secret_key);
+    let tx = test_utils::transfer(
+        crate::prelude::Address([1; 20]),
+        Wei::new_u64(2_000_000),
+        nonce.into(),
+    );
+    let signed_tx = test_utils::sign_transaction(
+        tx,
+        Some(AuroraRunner::default().chain_id),
+        &signer.secret_key,
+    );
     let x = aurora.call("submit", rlp::encode(&signed_tx).as_ref());
     println!("{:?}", x);
 
@@ -87,6 +97,19 @@ fn deploy_evm() -> AuroraAccount {
             contract_account.account_id.clone(),
             "new",
             &new_args.try_to_vec().unwrap(),
+            near_sdk_sim::DEFAULT_GAS,
+            0,
+        )
+        .assert_success();
+    let connector_init_args = InitCallArgs {
+        prover_account: "prover.near".to_string(),
+        eth_custodian_address: "0101010101010101010101010101010101010101".to_string(),
+    };
+    contract_account
+        .call(
+            contract_account.account_id.clone(),
+            "new_eth_connector",
+            &connector_init_args.try_to_vec().unwrap(),
             near_sdk_sim::DEFAULT_GAS,
             0,
         )
