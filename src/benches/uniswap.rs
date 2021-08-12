@@ -8,9 +8,8 @@ const MINT_AMOUNT: u64 = 1_000_000_000;
 const LIQUIDITY_AMOUNT: u64 = MINT_AMOUNT / 2;
 const OUTPUT_AMOUNT: u64 = LIQUIDITY_AMOUNT / 100;
 
-pub(crate) fn uniswap_benchmark(c: &mut Criterion) {
+pub(crate) fn uniswap_benchmark(c: &mut Criterion, context: &mut UniswapTestContext) {
     let calling_account_id = "some-account.near".to_string();
-    let mut context = UniswapTestContext::new();
     let chain_id = Some(context.runner.chain_id);
     let (token_a, token_b) = context.create_token_pair(MINT_AMOUNT.into());
     context.create_pool(&token_a, &token_b);
@@ -37,7 +36,7 @@ pub(crate) fn uniswap_benchmark(c: &mut Criterion) {
     let signed_tx = test_utils::sign_transaction(tx, chain_id, &context.signer.secret_key);
     let swap_tx_bytes = rlp::encode(&signed_tx).to_vec();
 
-    let mut group = c.benchmark_group("uniswap");
+    let mut group = c.benchmark_group(&context.name);
     let liquidity_id = BenchmarkId::from_parameter("add_liquidity");
     let swap_id = BenchmarkId::from_parameter("swap");
 

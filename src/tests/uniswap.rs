@@ -23,7 +23,7 @@ const OUTPUT_AMOUNT: u64 = LIQUIDITY_AMOUNT / 100;
 
 #[test]
 fn test_uniswap_exact_output() {
-    let mut context = UniswapTestContext::new();
+    let mut context = UniswapTestContext::new("uniswap");
     let (token_a, token_b) = context.create_token_pair(MINT_AMOUNT.into());
     let _pool = context.create_pool(&token_a, &token_b);
 
@@ -48,10 +48,11 @@ pub(crate) struct UniswapTestContext {
     pub swap_router: SwapRouter,
     pub signer: Signer,
     pub runner: AuroraRunner,
+    pub name: String,
 }
 
 impl UniswapTestContext {
-    pub fn new() -> Self {
+    pub fn new(name: &str) -> Self {
         let mut runner = test_utils::deploy_evm();
         let mut rng = rand::thread_rng();
         let source_account = SecretKey::random(&mut rng);
@@ -110,7 +111,12 @@ impl UniswapTestContext {
             swap_router,
             signer,
             runner,
+            name: String::from(name),
         }
+    }
+
+    pub fn no_gas(&mut self) {
+        self.runner.wasm_config.regular_op_cost = 0;
     }
 
     pub fn create_token_pair(&mut self, mint_amount: U256) -> (ERC20, ERC20) {

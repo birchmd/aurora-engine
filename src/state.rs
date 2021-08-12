@@ -5,9 +5,9 @@ use evm::{ExitError, Transfer};
 use crate::engine::Engine;
 use crate::parameters::PromiseCreateArgs;
 use crate::prelude::{Vec, H160, H256, U256};
+use crate::sdk;
 use crate::types::Stack;
 use crate::AuroraState;
-use crate::sdk;
 
 pub struct AuroraStackState<'backend, 'config> {
     memory_stack_state: MemoryStackState<'backend, 'config, Engine>,
