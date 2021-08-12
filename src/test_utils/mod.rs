@@ -98,6 +98,7 @@ pub(crate) struct AuroraRunner {
     pub current_protocol_version: u32,
     pub profile: ProfileData,
     pub previous_logs: Vec<String>,
+    pub vm_kind: near_vm_runner::VMKind,
 }
 
 /// Same as `AuroraRunner`, but consumes `self` on execution (thus preventing building on
@@ -123,7 +124,7 @@ impl<'a> OneShotAuroraRunner<'a> {
             input,
         );
 
-        near_vm_runner::run(
+        near_vm_runner::run_vm(
             &self.base.code,
             method_name,
             &mut self.ext,
@@ -131,9 +132,10 @@ impl<'a> OneShotAuroraRunner<'a> {
             &self.base.wasm_config,
             &self.base.fees_config,
             &[],
+            self.base.vm_kind,
             self.base.current_protocol_version,
             Some(&self.base.cache),
-            &Default::default(),
+            Default::default(),
         )
     }
 }
@@ -358,6 +360,7 @@ impl Default for AuroraRunner {
             current_protocol_version: u32::MAX,
             profile: Default::default(),
             previous_logs: Default::default(),
+            vm_kind: Default::default(),
         }
     }
 }

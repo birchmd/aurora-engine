@@ -26,10 +26,19 @@ fn benches() {
 fn uniswap_benches() {
     let mut c = Criterion::default();
 
-    let mut context = UniswapTestContext::new("uniswap");
+    let mut context = UniswapTestContext::new("uniswap-wasmer0");
     uniswap::uniswap_benchmark(&mut c, &mut context);
 
-    let mut context = UniswapTestContext::new("uniswap-no-gas");
+    let mut context = UniswapTestContext::new("uniswap-wasmer0-no-gas");
+    context.no_gas();
+    uniswap::uniswap_benchmark(&mut c, &mut context);
+
+    let mut context = UniswapTestContext::new("uniswap-wasmer1");
+    context.runner.vm_kind = near_vm_runner::VMKind::Wasmer1;
+    uniswap::uniswap_benchmark(&mut c, &mut context);
+
+    let mut context = UniswapTestContext::new("uniswap-wasmer1-no-gas");
+    context.runner.vm_kind = near_vm_runner::VMKind::Wasmer1;
     context.no_gas();
     uniswap::uniswap_benchmark(&mut c, &mut context);
 
