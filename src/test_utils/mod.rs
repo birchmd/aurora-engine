@@ -138,9 +138,12 @@ impl<'a> OneShotAuroraRunner<'a> {
             &[],
             self.base.current_protocol_version,
             Some(&self.base.cache),
-            profile.as_ref(),
         )
     }
+}
+
+pub fn as_account_id(x: String) -> near_primitives_core::types::AccountId {
+  x.as_str().parse().unwrap()
 }
 
 impl AuroraRunner {
@@ -161,8 +164,8 @@ impl AuroraRunner {
         context.block_index += 1;
         context.block_timestamp += 100;
         context.input = input;
-        context.signer_account_id = signer_account_id;
-        context.predecessor_account_id = caller_account_id;
+        context.signer_account_id = as_account_id(signer_account_id);
+        context.predecessor_account_id = as_account_id(caller_account_id);
     }
 
     pub fn call(
@@ -225,7 +228,6 @@ impl AuroraRunner {
             &[],
             self.current_protocol_version,
             Some(&self.cache),
-            profile.as_ref(),
         );
         if let Some(outcome) = &maybe_outcome {
             self.context.storage_usage = outcome.storage_usage;
@@ -316,7 +318,7 @@ impl AuroraRunner {
 
     pub fn view_call(&self, args: ViewCallArgs) -> Result<TransactionStatus, VMError> {
         let input = args.try_to_vec().unwrap();
-        let (outcome, maybe_error) = self.one_shot().call("view", "VIEWER".to_string(), input);
+        let (outcome, maybe_error) = self.one_shot().call("view", "viewer".to_string(), input);
         Ok(
             TransactionStatus::try_from_slice(&Self::bytes_from_outcome(outcome, maybe_error)?)
                 .unwrap(),
@@ -350,7 +352,7 @@ impl AuroraRunner {
     fn getter_method_call(&self, method_name: &str, address: Address) -> U256 {
         let (outcome, maybe_error) = self.one_shot().call(
             method_name,
-            "GETTER".to_string(),
+            "getter".to_string(),
             address.as_bytes().to_vec(),
         );
         assert!(maybe_error.is_none());
@@ -389,10 +391,10 @@ impl Default for AuroraRunner {
             cache: Default::default(),
             ext: Default::default(),
             context: VMContext {
-                current_account_id: aurora_account_id.clone(),
-                signer_account_id: aurora_account_id.clone(),
+                current_account_id: as_account_id(aurora_account_id.clone()),
+                signer_account_id: as_account_id(aurora_account_id.clone()),
                 signer_account_pk: vec![],
-                predecessor_account_id: aurora_account_id,
+                predecessor_account_id: as_account_id(aurora_account_id.clone()),
                 input: vec![],
                 block_index: 0,
                 block_timestamp: 0,
@@ -403,8 +405,8 @@ impl Default for AuroraRunner {
                 attached_deposit: 0,
                 prepaid_gas: 10u64.pow(18),
                 random_seed: vec![],
-                is_view: false,
                 output_data_receivers: vec![],
+                view_config: None,
             },
             wasm_config: Default::default(),
             fees_config: Default::default(),
