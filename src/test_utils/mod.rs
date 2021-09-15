@@ -372,7 +372,7 @@ impl Default for AuroraRunner {
 /// (which was removed in https://github.com/near/nearcore/pull/4438).
 #[derive(Default, Clone)]
 pub(crate) struct ExecutionProfile {
-    host_breakdown: ProfileData,
+    pub host_breakdown: ProfileData,
     wasm_gas: u64,
 }
 
