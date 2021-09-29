@@ -19,7 +19,7 @@ aurora-engine-sdk = { path = "../engine-sdk", default-features = false }
 borsh = { version = "0.8.2", default-features = false }
 byte-slice-cast = { version = "1.0", default-features = false }
 sha3 = { version = "0.9.1", default-features = false }
-evm = { git = "https://github.com/aurora-is-near/sputnikvm.git", default-features = false }
+evm = { git = "https://github.com/aurora-is-near/sputnikvm.git", rev = "07a11f669286d0512bf05bede458e576dce16e2a", default-features = false }
 rlp = { version = "0.5.0", default-features = false }
 
 [dev-dependencies]
@@ -28,13 +28,13 @@ ethabi = { git = "https://github.com/darwinia-network/ethabi", branch = "xavier-
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 hex = { version = "0.4.3", default-features = false }
-near-sdk = { git = "https://github.com/aurora-is-near/near-sdk-rs.git", rev = "5e58722bd61d9d24ae6293326146c751f0a814fb" }
-near-sdk-sim = { git = "https://github.com/aurora-is-near/near-sdk-rs.git", rev = "5e58722bd61d9d24ae6293326146c751f0a814fb" }
-near-crypto = { git = "https://github.com/near/nearcore.git", rev = "8a377fda0b4ce319385c463f1ae46e4b0b29dcd9" }
-near-vm-runner = { git = "https://github.com/near/nearcore.git", rev = "8a377fda0b4ce319385c463f1ae46e4b0b29dcd9" }
-near-vm-logic = { git = "https://github.com/near/nearcore.git", rev = "8a377fda0b4ce319385c463f1ae46e4b0b29dcd9" }
-near-primitives-core = { git = "https://github.com/near/nearcore.git", rev = "8a377fda0b4ce319385c463f1ae46e4b0b29dcd9" }
-near-primitives = { git = "https://github.com/near/nearcore.git", rev = "8a377fda0b4ce319385c463f1ae46e4b0b29dcd9" }
+near-sdk = { git = "https://github.com/aurora-is-near/near-sdk-rs.git", rev = "d802581815546bc4edbc03fe2831d59bd4688a0e" }
+near-sdk-sim = { git = "https://github.com/aurora-is-near/near-sdk-rs.git", rev = "d802581815546bc4edbc03fe2831d59bd4688a0e" }
+near-crypto = { git = "https://github.com/birchmd/nearcore.git", rev = "b43863cfdd9c7e072625e8cad15435c181241f7e" }
+near-vm-runner = { git = "https://github.com/birchmd/nearcore.git", rev = "b43863cfdd9c7e072625e8cad15435c181241f7e" }
+near-vm-logic = { git = "https://github.com/birchmd/nearcore.git", rev = "b43863cfdd9c7e072625e8cad15435c181241f7e" }
+near-primitives-core = { git = "https://github.com/birchmd/nearcore.git", rev = "b43863cfdd9c7e072625e8cad15435c181241f7e" }
+near-primitives = { git = "https://github.com/birchmd/nearcore.git", rev = "b43863cfdd9c7e072625e8cad15435c181241f7e" }
 wasmer-runtime-core = { version = "0.18.2", package = "wasmer-runtime-core-near" }
 libsecp256k1 = "0.3.5"
 rand = "0.7.3"

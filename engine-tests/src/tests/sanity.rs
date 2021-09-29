@@ -607,13 +607,16 @@ fn get_compiled_artifact(
 ) -> wasmer_runtime_core::cache::Artifact {
     use near_primitives::types::CompiledContractCache;
 
-    near_vm_runner::precompile_contract(&runner.code, &runner.wasm_config, Some(&runner.cache))
-        .unwrap();
-    let cache_key = near_vm_runner::get_contract_cache_key(
+    let vm_kind = near_vm_runner::VMKind::Wasmer0;
+    near_vm_runner::precompile_contract_vm(
+        vm_kind,
         &runner.code,
-        Default::default(),
         &runner.wasm_config,
-    );
+        Some(&runner.cache),
+    )
+    .unwrap();
+    let cache_key =
+        near_vm_runner::get_contract_cache_key(&runner.code, vm_kind, &runner.wasm_config);
     let cache_record: Vec<u8> =
         Vec::try_from_slice(&runner.cache.get(cache_key.as_ref()).unwrap().unwrap()[1..]).unwrap();
     wasmer_runtime_core::cache::Artifact::deserialize(&cache_record).unwrap()

@@ -1009,6 +1009,14 @@ impl evm::backend::Backend for Engine {
     fn original_storage(&self, _address: Address, _index: H256) -> Option<H256> {
         None
     }
+
+    fn enter_scope(&self, scope_id: u32) {
+        aurora_engine_sdk::profiling::enter_scope(scope_id);
+    }
+
+    fn exit_scope(&self) {
+        aurora_engine_sdk::profiling::exit_scope();
+    }
 }
 
 impl ApplyBackend for Engine {

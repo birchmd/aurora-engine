@@ -183,6 +183,25 @@ mod exports {
         // ###############
         fn validator_stake(account_id_len: u64, account_id_ptr: u64, stake_ptr: u64);
         fn validator_total_stake(stake_ptr: u64);
+        // #################
+        // # Profiling API #
+        // #################
+        pub fn enter_scope(scope_id: u32);
+        pub fn exit_scope();
+    }
+}
+
+pub mod profiling {
+    pub fn enter_scope(scope_id: u32) {
+        unsafe {
+            super::exports::enter_scope(scope_id);
+        }
+    }
+
+    pub fn exit_scope() {
+        unsafe {
+            super::exports::exit_scope();
+        }
     }
 }
 
