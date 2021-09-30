@@ -429,6 +429,20 @@ impl ExecutionProfile {
     pub fn all_gas(&self) -> u64 {
         self.wasm_gas + self.host_breakdown.host_gas() + self.host_breakdown.action_gas()
     }
+
+    pub fn scope_gas(&self, index: usize) -> u64 {
+        self.host_breakdown.get_scoped_cost(index)
+    }
+
+    pub fn print_scopes(&self) {
+        let total = self.all_gas();
+        for index in 0..16 {
+            let g = self.scope_gas(index);
+            if g > 0 {
+                println!("SCOPE_{}: {}", index, g * 100 / total);
+            }
+        }
+    }
 }
 
 pub(crate) fn deploy_evm() -> AuroraRunner {

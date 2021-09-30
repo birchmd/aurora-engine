@@ -64,6 +64,7 @@ fn test_1inch_liquidity_protocol() {
     );
     assert!(result.gas_used >= 302_000); // more than 302k EVM gas used
     assert!(profile.all_gas() <= 120_000_000_000_000); // less than 120 NEAR Tgas used
+    profile.print_scopes();
 
     // Same here
     helper.runner.context.block_timestamp += 10_000_000 * 1_000_000_000;

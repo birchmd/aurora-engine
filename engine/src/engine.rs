@@ -604,8 +604,10 @@ impl Engine {
         access_list: Vec<(Address, Vec<H256>)>, // See EIP-2930
     ) -> EngineResult<SubmitResult> {
         let mut executor = self.make_executor(gas_limit);
+        aurora_engine_sdk::profiling::enter_scope(1);
         let (exit_reason, result) =
             executor.transact_call(origin, contract, value.raw(), input, gas_limit, access_list);
+        aurora_engine_sdk::profiling::exit_scope();
 
         let used_gas = executor.used_gas();
         let status = match exit_reason.into_result(result) {

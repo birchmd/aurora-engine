@@ -206,6 +206,7 @@ mod contract {
     pub extern "C" fn submit() {
         use crate::transaction::EthTransaction;
 
+        sdk::profiling::enter_scope(0);
         let input = sdk::read_input();
 
         let signed_transaction = EthTransaction::try_from(input.as_slice()).sdk_unwrap();
@@ -298,6 +299,7 @@ mod contract {
         result
             .map(|res| res.try_to_vec().sdk_expect("ERR_SERIALIZE"))
             .sdk_process();
+        sdk::profiling::exit_scope();
     }
 
     #[cfg(feature = "meta-call")]
