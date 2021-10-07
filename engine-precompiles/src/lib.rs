@@ -4,12 +4,15 @@
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
 #![cfg_attr(feature = "log", feature(panic_info_message))]
 
+extern crate alloc;
+
 pub mod blake2;
 pub mod bn128;
 pub mod hash;
 pub mod identity;
 pub mod modexp;
 pub mod native;
+pub mod near;
 mod prelude;
 pub mod secp256k1;
 #[cfg(test)]
