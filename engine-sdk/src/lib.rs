@@ -100,7 +100,7 @@ mod exports {
             amount_ptr: u64,
             gas: u64,
         ) -> u64;
-        fn promise_and(promise_idx_ptr: u64, promise_idx_count: u64) -> u64;
+        pub(crate) fn promise_and(promise_idx_ptr: u64, promise_idx_count: u64) -> u64;
         pub(crate) fn promise_batch_create(account_id_len: u64, account_id_ptr: u64) -> u64;
         fn promise_batch_then(promise_index: u64, account_id_len: u64, account_id_ptr: u64) -> u64;
         // #######################
@@ -522,6 +522,10 @@ pub fn promise_then(
             gas,
         )
     }
+}
+
+pub fn promise_and(promise_ids: &[u64]) -> u64 {
+    unsafe { exports::promise_and(promise_ids.as_ptr() as _, promise_ids.len() as _) }
 }
 
 pub fn promise_return(promise_idx: u64) {
