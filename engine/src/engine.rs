@@ -12,8 +12,8 @@ use crate::contract::current_address;
 use crate::map::{BijectionMap, LookupMap};
 use crate::prelude::{
     address_to_key, bytes_to_key, is_valid_account_id, sdk, storage_to_key, u256_to_arr, AccountId,
-    Address, BorshDeserialize, BorshSerialize, KeyPrefix, KeyPrefixU8, PromiseCreateArgs, TryInto,
-    Vec, Wei, ERC20_MINT_SELECTOR, H256, U256,
+    Address, BorshDeserialize, BorshSerialize, KeyPrefix, KeyPrefixU8, PromiseArgs,
+    PromiseCreateArgs, TryInto, Vec, Wei, ERC20_MINT_SELECTOR, H256, U256,
 };
 
 use crate::parameters::{NewCallArgs, TransactionStatus};
@@ -856,8 +856,14 @@ impl Engine {
             .filter_map(|log| {
                 if log.address == ExitToNear::ADDRESS || log.address == ExitToEthereum::ADDRESS {
                     if log.topics.is_empty() {
-                        if let Ok(promise) = PromiseCreateArgs::try_from_slice(&log.data) {
-                            Self::schedule_promise(promise);
+                        if let Ok(promise) = PromiseArgs::try_from_slice(&log.data) {
+                            match promise {
+                                PromiseArgs::Create(promise) => Self::schedule_promise(promise),
+                                PromiseArgs::Callback(promise) => {
+                                    let base_id = Self::schedule_promise(promise.base);
+                                    Self::schedule_promise_callback(base_id, promise.callback)
+                                }
+                            };
                         }
                         // do not pass on these "internal logs" to caller
                         None
@@ -874,7 +880,7 @@ impl Engine {
             .collect()
     }
 
-    fn schedule_promise(promise: PromiseCreateArgs) {
+    fn schedule_promise(promise: PromiseCreateArgs) -> u64 {
         #[cfg(feature = "log")]
         sdk::log_utf8(
             crate::prelude::format!(
@@ -890,7 +896,27 @@ impl Engine {
             promise.args.as_slice(),
             promise.attached_balance,
             promise.attached_gas,
+        )
+    }
+
+    fn schedule_promise_callback(base_id: u64, promise: PromiseCreateArgs) -> u64 {
+        #[cfg(feature = "log")]
+        sdk::log_utf8(
+            crate::prelude::format!(
+                "[CALLBACK] Call contract: {}.{}",
+                promise.target_account_id,
+                promise.method
+            )
+            .as_bytes(),
         );
+        sdk::promise_then(
+            base_id,
+            promise.target_account_id.as_bytes(),
+            promise.method.as_bytes(),
+            promise.args.as_slice(),
+            promise.attached_balance,
+            promise.attached_gas,
+        )
     }
 }
 

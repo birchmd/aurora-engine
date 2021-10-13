@@ -49,11 +49,12 @@ contract EvmErc20 is ERC20, AdminControlled, IExit {
     }
 
     function withdrawToNear(bytes memory recipient, uint256 amount) external override {
-        _burn(_msgSender(), amount);
+        address sender = _msgSender();
+        _burn(sender, amount);
 
         bytes32 amount_b = bytes32(amount);
-        bytes memory input = abi.encodePacked("\x01", amount_b, recipient);
-        uint input_size = 1 + 32 + recipient.length;
+        bytes memory input = abi.encodePacked("\x01", sender, amount_b, recipient);
+        uint input_size = 1 + 20 + 32 + recipient.length;
 
         assembly {
             let res := call(gas(), 0xe9217bc70b7ed1f598ddd3199e80b093fa71124f, 0, add(input, 32), input_size, 0, 32)

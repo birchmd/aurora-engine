@@ -2,10 +2,12 @@ use super::{EvmPrecompileResult, Precompile};
 #[cfg(feature = "contract")]
 use crate::prelude::{
     format, is_valid_account_id,
-    parameters::{PromiseCreateArgs, WithdrawCallArgs},
+    parameters::{
+        PromiseArgs, PromiseCreateArgs, PromiseWithCallbackArgs, RefundCallArgs, WithdrawCallArgs,
+    },
     sdk,
     storage::{bytes_to_key, KeyPrefix},
-    types::AccountId,
+    types::{self, AccountId},
     vec, BorshSerialize, Cow, String, ToString, TryInto, Vec, H160, U256,
 };
 
@@ -244,7 +246,9 @@ impl Precompile for ExitToNear {
         //      0x1 -> Erc20 transfer
         let mut input = input;
         let flag = input[0];
-        input = &input[1..];
+        let refund_address = Address::from_slice(&input[1..21]);
+        input = &input[21..];
+        let current_account_id = String::from_utf8(sdk::current_account_id()).unwrap();
 
         let (nep141_address, args, exit_event) = match flag {
             0x0 => {
@@ -256,7 +260,7 @@ impl Precompile for ExitToNear {
                 if is_valid_account_id(input) {
                     let dest_account = String::from_utf8(input.to_vec()).unwrap();
                     (
-                        String::from_utf8(sdk::current_account_id()).unwrap(),
+                        current_account_id.clone(),
                         // There is no way to inject json, given the encoding of both arguments
                         // as decimal and valid account id respectively.
                         format!(
@@ -325,13 +329,37 @@ impl Precompile for ExitToNear {
             _ => return Err(ExitError::Other(Cow::from("ERR_INVALID_FLAG"))),
         };
 
-        let promise: Vec<u8> = PromiseCreateArgs {
+        let erc20_address = if flag == 0 {
+            None
+        } else {
+            Some(exit_event.erc20_address.0)
+        };
+        let refund_args = RefundCallArgs {
+            recipient_address: refund_address.0,
+            erc20_address,
+            amount: types::u256_to_arr(&exit_event.amount),
+        };
+        let refund_promise = PromiseCreateArgs {
+            target_account_id: current_account_id,
+            // TODO: need to actually define this function in the engine
+            method: "refund_on_error".to_string(),
+            args: refund_args.try_to_vec().unwrap(),
+            attached_balance: 0,
+            // TODO:  How much gas?
+            attached_gas: costs::FT_TRANSFER_GAS,
+        };
+        let transfer_promise = PromiseCreateArgs {
             target_account_id: nep141_address,
             method: "ft_transfer".to_string(),
             args: args.as_bytes().to_vec(),
             attached_balance: 1,
             attached_gas: costs::FT_TRANSFER_GAS,
-        }
+        };
+
+        let promise = PromiseArgs::Callback(PromiseWithCallbackArgs {
+            base: transfer_promise,
+            callback: refund_promise,
+        })
         .try_to_vec()
         .unwrap();
         let promise_log = Log {
@@ -495,15 +523,15 @@ impl Precompile for ExitToEthereum {
             }
         };
 
-        let promise = PromiseCreateArgs {
+        let withdraw_promise = PromiseCreateArgs {
             target_account_id: nep141_address,
             method: "withdraw".to_string(),
             args: serialized_args,
             attached_balance: 1,
             attached_gas: costs::WITHDRAWAL_GAS,
-        }
-        .try_to_vec()
-        .unwrap();
+        };
+
+        let promise = PromiseArgs::Create(withdraw_promise).try_to_vec().unwrap();
         let promise_log = Log {
             address: Self::ADDRESS,
             topics: Vec::new(),
