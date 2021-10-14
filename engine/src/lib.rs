@@ -79,12 +79,15 @@ mod contract {
     };
 
     use crate::json::parse_json;
+    use crate::prelude::parameters::RefundCallArgs;
     use crate::prelude::sdk::types::{
         near_account_to_evm_address, SdkExpect, SdkProcess, SdkUnwrap,
     };
     use crate::prelude::storage::{bytes_to_key, KeyPrefix};
-    use crate::prelude::types::{u256_to_arr, ERR_FAILED_PARSE};
-    use crate::prelude::{sdk, Address, ToString, TryFrom, TryInto, H160, H256, U256};
+    use crate::prelude::types::{
+        u256_to_arr, PromiseResult, Wei, ERC20_MINT_SELECTOR, ERR_FAILED_PARSE,
+    };
+    use crate::prelude::{sdk, vec, Address, ToString, TryFrom, TryInto, Vec, H160, H256, U256};
 
     const CODE_KEY: &[u8; 4] = b"CODE";
     const CODE_STAGE_KEY: &[u8; 10] = b"CODE_STAGE";
@@ -401,6 +404,71 @@ mod contract {
         // TODO: charge for storage
     }
 
+    /// Callback invoked by exit to NEAR precompile to handle potential
+    /// errors in the exit call.
+    #[no_mangle]
+    pub extern "C" fn refund_on_error() {
+        sdk::assert_private_call();
+
+        // This function should only be called as the callback of
+        // exactly one promise.
+        if sdk::promise_results_count() != 1 {
+            sdk::panic_utf8(b"ERR_PROMISE_COUNT");
+        }
+
+        // Exit call failed; need to refund tokens
+        if let PromiseResult::Failed = sdk::promise_result(0) {
+            let args: RefundCallArgs = sdk::read_input_borsh().sdk_unwrap();
+            let refund_result = match args.erc20_address {
+                // ERC-20 exit; re-mint burned tokens
+                Some(erc20_address) => {
+                    let erc20_admin_address = current_address();
+                    let mut engine = Engine::new(erc20_admin_address).sdk_unwrap();
+                    let erc20_address = Address(erc20_address);
+                    let refund_address = Address(args.recipient_address);
+                    let amount = U256::from_big_endian(&args.amount);
+
+                    let selector = ERC20_MINT_SELECTOR;
+                    let mint_args = ethabi::encode(&[
+                        ethabi::Token::Address(refund_address),
+                        ethabi::Token::Uint(amount),
+                    ]);
+
+                    engine
+                        .call(
+                            erc20_admin_address,
+                            erc20_address,
+                            Wei::zero(),
+                            [selector, mint_args.as_slice()].concat(),
+                            u64::MAX,
+                            Vec::new(),
+                        )
+                        .sdk_unwrap()
+                }
+                // ETH exit; transfer ETH back from precompile address
+                None => {
+                    let exit_address = aurora_engine_precompiles::native::ExitToNear::ADDRESS;
+                    let mut engine = Engine::new(exit_address).sdk_unwrap();
+                    let refund_address = Address(args.recipient_address);
+                    let amount = Wei::new(U256::from_big_endian(&args.amount));
+                    engine
+                        .call(
+                            exit_address,
+                            refund_address,
+                            amount,
+                            Vec::new(),
+                            u64::MAX,
+                            vec![(exit_address, Vec::new()), (refund_address, Vec::new())],
+                        )
+                        .sdk_unwrap()
+                }
+            };
+
+            if !refund_result.status.is_ok() {
+                sdk::panic_utf8(b"ERR_REFUND_FAILURE");
+            }
+        }
+    }
     ///
     /// NONMUTATIVE METHODS
     ///

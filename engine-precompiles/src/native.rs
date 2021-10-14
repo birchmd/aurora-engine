@@ -341,7 +341,6 @@ impl Precompile for ExitToNear {
         };
         let refund_promise = PromiseCreateArgs {
             target_account_id: current_account_id,
-            // TODO: need to actually define this function in the engine
             method: "refund_on_error".to_string(),
             args: refund_args.try_to_vec().unwrap(),
             attached_balance: 0,
