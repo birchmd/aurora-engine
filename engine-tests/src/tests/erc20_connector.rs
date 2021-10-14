@@ -384,3 +384,227 @@ fn test_transfer_erc20_token() {
         U256::from(to_transfer)
     );
 }
+
+// Simulation tests for exit to NEAR precompile.
+// Note: `AuroraRunner` is not suitable for these tests because
+// it does not execute promises; but `near-sdk-sim` does.
+mod sim_tests {
+    use crate::prelude::{Address, U256};
+    use crate::test_utils;
+    use crate::test_utils::erc20::{ERC20Constructor, ERC20};
+    use crate::tests::state_migration::{deploy_evm, AuroraAccount};
+    use aurora_engine::parameters::{DeployErc20TokenArgs, FunctionCallArgs, SubmitResult};
+    use borsh::BorshSerialize;
+    use near_sdk_sim::UserAccount;
+    use serde_json::json;
+
+    const FT_PATH: &str = "src/tests/res/fungible_token.wasm";
+    const FT_TOTAL_SUPPLY: u128 = 1_000_000;
+    const FT_TRANSFER_AMOUNT: u128 = 300_000;
+    const FT_ACCOUNT: &str = "test_token";
+
+    #[test]
+    fn test_exit_to_near() {
+        // 1. deploy Aurora
+        let aurora = deploy_evm();
+
+        // 2. Create account
+        let ft_owner = aurora.user.create_user(
+            "ft_owner.root".parse().unwrap(),
+            near_sdk_sim::STORAGE_AMOUNT,
+        );
+        let ft_owner_address =
+            aurora_engine_sdk::types::near_account_to_evm_address(ft_owner.account_id.as_bytes());
+        aurora
+            .call(
+                "mint_account",
+                &(ft_owner_address.0, 0u64, u64::MAX).try_to_vec().unwrap(),
+            )
+            .assert_success();
+
+        // 3. Deploy NEP-141
+        let nep_141 = deploy_nep_141(
+            FT_ACCOUNT,
+            ft_owner.account_id.as_ref(),
+            FT_TOTAL_SUPPLY,
+            &aurora,
+        );
+
+        assert_eq!(
+            nep_141_balance_of(ft_owner.account_id.as_str(), &nep_141, &aurora),
+            FT_TOTAL_SUPPLY
+        );
+
+        // 4. Deploy ERC-20 from NEP-141 and bridge value to Aurora
+        let erc20 = deploy_erc20_from_nep_141(&nep_141, &aurora);
+        transfer_nep_141_to_erc_20(
+            &nep_141,
+            &erc20,
+            &ft_owner,
+            ft_owner_address,
+            FT_TRANSFER_AMOUNT,
+            &aurora,
+        );
+
+        assert_eq!(
+            nep_141_balance_of(ft_owner.account_id.as_str(), &nep_141, &aurora),
+            FT_TOTAL_SUPPLY - FT_TRANSFER_AMOUNT
+        );
+        assert_eq!(
+            nep_141_balance_of(aurora.contract.account_id.as_str(), &nep_141, &aurora),
+            FT_TRANSFER_AMOUNT
+        );
+        assert_eq!(
+            erc20_balance(&erc20, ft_owner_address, &aurora),
+            FT_TRANSFER_AMOUNT.into()
+        );
+
+        // 5. Call exit function on ERC-20 and observe ERC-20 burned + NEP-141 transferred
+        todo!()
+    }
+
+    fn transfer_nep_141_to_erc_20(
+        nep_141: &near_sdk_sim::UserAccount,
+        erc20: &ERC20,
+        source: &near_sdk_sim::UserAccount,
+        dest: Address,
+        amount: u128,
+        aurora: &AuroraAccount,
+    ) {
+        let transfer_args = json!({
+            "receiver_id": aurora.contract.account_id.as_str(),
+            "amount": format!("{:?}", amount),
+            "memo": "null",
+        });
+        source
+            .call(
+                nep_141.account_id(),
+                "ft_transfer",
+                transfer_args.to_string().as_bytes(),
+                near_sdk_sim::DEFAULT_GAS,
+                1,
+            )
+            .assert_success();
+
+        let mint_tx = erc20.mint(dest, amount.into(), 0.into());
+        let call_args = FunctionCallArgs {
+            contract: erc20.0.address.0,
+            input: mint_tx.data,
+        };
+        aurora
+            .contract
+            .call(
+                aurora.contract.account_id(),
+                "call",
+                &call_args.try_to_vec().unwrap(),
+                near_sdk_sim::DEFAULT_GAS,
+                0,
+            )
+            .assert_success();
+    }
+
+    fn erc20_balance(erc20: &ERC20, address: Address, aurora: &AuroraAccount) -> U256 {
+        let balance_tx = erc20.balance_of(address, 0.into());
+        let call_args = FunctionCallArgs {
+            contract: erc20.0.address.0,
+            input: balance_tx.data,
+        };
+        let result = aurora.call("call", &call_args.try_to_vec().unwrap());
+        let submit_result: SubmitResult = result.unwrap_borsh();
+        U256::from_big_endian(&test_utils::unwrap_success(submit_result))
+    }
+
+    fn deploy_erc20_from_nep_141(
+        nep_141: &near_sdk_sim::UserAccount,
+        aurora: &AuroraAccount,
+    ) -> ERC20 {
+        let args = DeployErc20TokenArgs {
+            nep141: nep_141.account_id().to_string(),
+        };
+        let result = aurora.call("deploy_erc20_token", &args.try_to_vec().unwrap());
+        let addr_bytes: Vec<u8> = result.unwrap_borsh();
+        let address = Address::from_slice(&addr_bytes);
+        let abi = ERC20Constructor::load().0.abi;
+        ERC20(crate::test_utils::solidity::DeployedContract { abi, address })
+    }
+
+    fn nep_141_balance_of(
+        account_id: &str,
+        nep_141: &near_sdk_sim::UserAccount,
+        aurora: &AuroraAccount,
+    ) -> u128 {
+        aurora
+            .user
+            .call(
+                nep_141.account_id(),
+                "ft_balance_of",
+                json!({ "account_id": account_id }).to_string().as_bytes(),
+                near_sdk_sim::DEFAULT_GAS,
+                0,
+            )
+            .unwrap_json_value()
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap()
+    }
+
+    /// Deploys the standard FT implementation:
+    /// https://github.com/near/near-sdk-rs/blob/master/examples/fungible-token/ft/src/lib.rs
+    fn deploy_nep_141(
+        nep_141_account_id: &str,
+        token_owner: &str,
+        amount: u128,
+        aurora: &AuroraAccount,
+    ) -> UserAccount {
+        let contract_bytes = std::fs::read(FT_PATH).unwrap();
+
+        let contract_account = aurora.user.deploy(
+            &contract_bytes,
+            nep_141_account_id.parse().unwrap(),
+            5 * near_sdk_sim::STORAGE_AMOUNT,
+        );
+
+        let init_args = json!({
+            "owner_id": token_owner,
+            "total_supply": format!("{:?}", amount),
+        })
+        .to_string();
+
+        aurora
+            .user
+            .call(
+                contract_account.account_id(),
+                "new_default_meta",
+                init_args.as_bytes(),
+                near_sdk_sim::DEFAULT_GAS,
+                0,
+            )
+            .assert_success();
+
+        // Need to register Aurora contract so that it can receive tokens
+        let args = json!({
+            "account_id": &aurora.contract.account_id,
+        })
+        .to_string();
+        aurora
+            .user
+            .call(
+                contract_account.account_id(),
+                "storage_deposit",
+                args.as_bytes(),
+                near_sdk_sim::DEFAULT_GAS,
+                near_sdk_sim::STORAGE_AMOUNT,
+            )
+            .assert_success();
+
+        contract_account
+    }
+}
+
+#[test]
+fn test_exit_to_near_refund() {
+    // Same as above, however the `ft_transfer` call in step 5 will fail.
+    // This should trigger the refund logic so that in the end ERC-20 tokens
+    // still exist and Aurora balance remains unchanged.
+}
