@@ -31,6 +31,8 @@ mod costs {
     // TODO(#51): Determine the correct amount of gas
     pub(super) const FT_TRANSFER_GAS: Gas = 100_000_000_000_000;
 
+    pub(super) const REFUND_ON_ERROR_GAS: Gas = 60_000_000_000_000;
+
     // TODO(#51): Determine the correct amount of gas
     pub(super) const WITHDRAWAL_GAS: Gas = 100_000_000_000_000;
 }
@@ -344,8 +346,7 @@ impl Precompile for ExitToNear {
             method: "refund_on_error".to_string(),
             args: refund_args.try_to_vec().unwrap(),
             attached_balance: 0,
-            // TODO:  How much gas?
-            attached_gas: costs::FT_TRANSFER_GAS,
+            attached_gas: costs::REFUND_ON_ERROR_GAS,
         };
         let transfer_promise = PromiseCreateArgs {
             target_account_id: nep141_address,
