@@ -480,38 +480,14 @@ mod sim_tests {
     fn test_exit_to_near_eth() {
         // Same test as above, but exit ETH instead of a bridged NEP-141
 
-        let aurora = deploy_evm();
-        let chain_id = test_utils::AuroraRunner::default().chain_id;
-        let signer = test_utils::Signer::random();
+        let TestExitToNearEthContext {
+            signer,
+            signer_address,
+            chain_id,
+            tester_address,
+            aurora,
+        } = test_exit_to_near_eth_common();
         let exit_account_id = "any.near".to_owned();
-        let signer_address = test_utils::address_from_secret_key(&signer.secret_key);
-        aurora
-            .call(
-                "mint_account",
-                &(signer_address.0, signer.nonce, INITIAL_ETH_BALANCE)
-                    .try_to_vec()
-                    .unwrap(),
-            )
-            .assert_success();
-
-        assert_eq!(
-            nep_141_balance_of(
-                aurora.contract.account_id.as_str(),
-                &aurora.contract,
-                &aurora
-            ),
-            INITIAL_ETH_BALANCE.into()
-        );
-        assert_eq!(
-            eth_balance_of(signer_address, &aurora),
-            Wei::new_u64(INITIAL_ETH_BALANCE)
-        );
-
-        // deploy contract with simple exit to near method
-        let constructor = TesterConstructor::load();
-        let deploy_data = constructor.deploy(0, Address::zero()).data;
-        let submit_result: SubmitResult = aurora.call("deploy_code", &deploy_data).unwrap_borsh();
-        let tester_address = Address::from_slice(&test_utils::unwrap_success(submit_result));
 
         // call exit to near
         let input = super::build_input(
@@ -544,6 +520,104 @@ mod sim_tests {
             eth_balance_of(signer_address, &aurora),
             Wei::new_u64(INITIAL_ETH_BALANCE - ETH_EXIT_AMOUNT)
         );
+    }
+
+    #[test]
+    fn test_exit_to_near_eth_refund() {
+        // Test the case where the ft_transfer promise from the exit call fails;
+        // ensure ETH is refunded.
+
+        let TestExitToNearEthContext {
+            signer,
+            signer_address,
+            chain_id,
+            tester_address,
+            aurora,
+        } = test_exit_to_near_eth_common();
+        let exit_account_id = "any.near".to_owned();
+
+        // Make the ft_transfer call fail by draining the Aurora account
+        let transfer_args = json!({
+            "receiver_id": "tmp.near",
+            "amount": format!("{:?}", INITIAL_ETH_BALANCE),
+            "memo": "null",
+        });
+        aurora
+            .contract
+            .call(
+                aurora.contract.account_id(),
+                "ft_transfer",
+                transfer_args.to_string().as_bytes(),
+                near_sdk_sim::DEFAULT_GAS,
+                1,
+            )
+            .assert_success();
+
+        // call exit to near
+        let input = super::build_input(
+            "withdrawEthToNear(bytes)",
+            &[ethabi::Token::Bytes(exit_account_id.as_bytes().to_vec())],
+        );
+        let tx = test_utils::create_eth_transaction(
+            Some(tester_address),
+            Wei::new_u64(ETH_EXIT_AMOUNT),
+            input,
+            Some(chain_id),
+            &signer.secret_key,
+        );
+        aurora.call("submit", &rlp::encode(&tx)).assert_success();
+
+        // check balances
+        assert_eq!(
+            nep_141_balance_of(exit_account_id.as_str(), &aurora.contract, &aurora),
+            0
+        );
+        assert_eq!(
+            eth_balance_of(signer_address, &aurora),
+            Wei::new_u64(INITIAL_ETH_BALANCE)
+        );
+    }
+
+    fn test_exit_to_near_eth_common() -> TestExitToNearEthContext {
+        let aurora = deploy_evm();
+        let chain_id = test_utils::AuroraRunner::default().chain_id;
+        let signer = test_utils::Signer::random();
+        let signer_address = test_utils::address_from_secret_key(&signer.secret_key);
+        aurora
+            .call(
+                "mint_account",
+                &(signer_address.0, signer.nonce, INITIAL_ETH_BALANCE)
+                    .try_to_vec()
+                    .unwrap(),
+            )
+            .assert_success();
+
+        assert_eq!(
+            nep_141_balance_of(
+                aurora.contract.account_id.as_str(),
+                &aurora.contract,
+                &aurora
+            ),
+            INITIAL_ETH_BALANCE.into()
+        );
+        assert_eq!(
+            eth_balance_of(signer_address, &aurora),
+            Wei::new_u64(INITIAL_ETH_BALANCE)
+        );
+
+        // deploy contract with simple exit to near method
+        let constructor = TesterConstructor::load();
+        let deploy_data = constructor.deploy(0, Address::zero()).data;
+        let submit_result: SubmitResult = aurora.call("deploy_code", &deploy_data).unwrap_borsh();
+        let tester_address = Address::from_slice(&test_utils::unwrap_success(submit_result));
+
+        TestExitToNearEthContext {
+            signer,
+            signer_address,
+            chain_id,
+            tester_address,
+            aurora,
+        }
     }
 
     fn test_exit_to_near_common() -> TestExitToNearContext {
@@ -796,6 +870,14 @@ mod sim_tests {
         ft_owner_address: Address,
         nep_141: near_sdk_sim::UserAccount,
         erc20: ERC20,
+        aurora: AuroraAccount,
+    }
+
+    struct TestExitToNearEthContext {
+        signer: test_utils::Signer,
+        signer_address: Address,
+        chain_id: u64,
+        tester_address: Address,
         aurora: AuroraAccount,
     }
 }
