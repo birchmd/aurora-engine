@@ -736,6 +736,35 @@ mod contract {
             reset_storage: false,
         };
         engine.apply(core::iter::once(state_change), core::iter::empty(), false);
+
+        // Call "finish_deposit" as well to mint the corresponding
+        // nETH NEP-141 tokens as well
+        let aurora_account = sdk::current_account_id();
+        let aurora_account_str =
+            crate::prelude::String::from_utf8_lossy(&aurora_account).into_owned();
+        let args = crate::parameters::FinishDepositCallArgs {
+            new_owner_id: aurora_account_str.clone(),
+            amount: balance.low_u128(),
+            proof_key: crate::prelude::String::new(),
+            relayer_id: aurora_account_str,
+            fee: 0,
+            msg: None,
+        };
+        let verify_id = sdk::promise_create(
+            &aurora_account,
+            b"verify_log_entry",
+            &[],
+            0,
+            20_000_000_000_000,
+        );
+        sdk::promise_then(
+            verify_id,
+            &aurora_account,
+            b"finish_deposit",
+            &args.try_to_vec().unwrap(),
+            0,
+            50_000_000_000_000,
+        );
     }
 
     ///
