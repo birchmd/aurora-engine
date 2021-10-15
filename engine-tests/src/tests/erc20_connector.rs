@@ -401,10 +401,79 @@ mod sim_tests {
     const FT_PATH: &str = "src/tests/res/fungible_token.wasm";
     const FT_TOTAL_SUPPLY: u128 = 1_000_000;
     const FT_TRANSFER_AMOUNT: u128 = 300_000;
+    const FT_EXIT_AMOUNT: u128 = 100_000;
     const FT_ACCOUNT: &str = "test_token";
 
     #[test]
     fn test_exit_to_near() {
+        // Deploy Aurora; deploy NEP-141; bridge NEP-141 to ERC-20 on Aurora
+        let TestExitToNearContext {
+            ft_owner,
+            ft_owner_address,
+            nep_141,
+            erc20,
+            aurora,
+        } = test_exit_to_near_common();
+
+        // Call exit function on ERC-20; observe ERC-20 burned + NEP-141 transferred
+        exit_to_near(
+            &ft_owner,
+            ft_owner.account_id.as_str(),
+            FT_EXIT_AMOUNT,
+            &erc20,
+            &aurora,
+        );
+
+        assert_eq!(
+            nep_141_balance_of(ft_owner.account_id.as_str(), &nep_141, &aurora),
+            FT_TOTAL_SUPPLY - FT_TRANSFER_AMOUNT + FT_EXIT_AMOUNT
+        );
+        assert_eq!(
+            nep_141_balance_of(aurora.contract.account_id.as_str(), &nep_141, &aurora),
+            FT_TRANSFER_AMOUNT - FT_EXIT_AMOUNT
+        );
+        assert_eq!(
+            erc20_balance(&erc20, ft_owner_address, &aurora),
+            (FT_TRANSFER_AMOUNT - FT_EXIT_AMOUNT).into()
+        );
+    }
+
+    #[test]
+    fn test_exit_to_near_refund() {
+        // Deploy Aurora; deploy NEP-141; bridge NEP-141 to ERC-20 on Aurora
+        let TestExitToNearContext {
+            ft_owner,
+            ft_owner_address,
+            nep_141,
+            erc20,
+            aurora,
+        } = test_exit_to_near_common();
+
+        // Call exit on ERC-20; ft_transfer promise fails; expect refund on Aurora;
+        exit_to_near(
+            &ft_owner,
+            // The ft_transfer will fail because this account is not registered with the NEP-141
+            "unregistered.near",
+            FT_EXIT_AMOUNT,
+            &erc20,
+            &aurora,
+        );
+
+        assert_eq!(
+            nep_141_balance_of(ft_owner.account_id.as_str(), &nep_141, &aurora),
+            FT_TOTAL_SUPPLY - FT_TRANSFER_AMOUNT
+        );
+        assert_eq!(
+            nep_141_balance_of(aurora.contract.account_id.as_str(), &nep_141, &aurora),
+            FT_TRANSFER_AMOUNT
+        );
+        assert_eq!(
+            erc20_balance(&erc20, ft_owner_address, &aurora),
+            FT_TRANSFER_AMOUNT.into()
+        );
+    }
+
+    fn test_exit_to_near_common() -> TestExitToNearContext {
         // 1. deploy Aurora
         let aurora = deploy_evm();
 
@@ -459,8 +528,42 @@ mod sim_tests {
             FT_TRANSFER_AMOUNT.into()
         );
 
-        // 5. Call exit function on ERC-20 and observe ERC-20 burned + NEP-141 transferred
-        todo!()
+        TestExitToNearContext {
+            ft_owner,
+            ft_owner_address,
+            nep_141,
+            erc20,
+            aurora,
+        }
+    }
+
+    fn exit_to_near(
+        source: &near_sdk_sim::UserAccount,
+        dest: &str,
+        amount: u128,
+        erc20: &ERC20,
+        aurora: &AuroraAccount,
+    ) {
+        let input = super::build_input(
+            "withdrawToNear(bytes,uint256)",
+            &[
+                ethabi::Token::Bytes(dest.as_bytes().to_vec()),
+                ethabi::Token::Uint(amount.into()),
+            ],
+        );
+        let call_args = FunctionCallArgs {
+            contract: erc20.0.address.0,
+            input,
+        };
+        source
+            .call(
+                aurora.contract.account_id(),
+                "call",
+                &call_args.try_to_vec().unwrap(),
+                near_sdk_sim::DEFAULT_GAS,
+                0,
+            )
+            .assert_success();
     }
 
     fn transfer_nep_141_to_erc_20(
@@ -600,11 +703,12 @@ mod sim_tests {
 
         contract_account
     }
-}
 
-#[test]
-fn test_exit_to_near_refund() {
-    // Same as above, however the `ft_transfer` call in step 5 will fail.
-    // This should trigger the refund logic so that in the end ERC-20 tokens
-    // still exist and Aurora balance remains unchanged.
+    struct TestExitToNearContext {
+        ft_owner: near_sdk_sim::UserAccount,
+        ft_owner_address: Address,
+        nep_141: near_sdk_sim::UserAccount,
+        erc20: ERC20,
+        aurora: AuroraAccount,
+    }
 }
