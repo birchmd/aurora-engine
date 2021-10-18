@@ -12,7 +12,7 @@ import "./IExit.sol";
  * Note they can later distribute these tokens as they wish using `transfer` and other
  * `ERC20` functions.
  */
-contract EvmErc20 is ERC20, AdminControlled, IExit {
+contract EvmErc20V2 is ERC20, AdminControlled, IExit {
     string private _name;
     string private _symbol;
     uint8 private _decimals;
@@ -49,11 +49,12 @@ contract EvmErc20 is ERC20, AdminControlled, IExit {
     }
 
     function withdrawToNear(bytes memory recipient, uint256 amount) external override {
-        _burn(_msgSender(), amount);
+        address sender = _msgSender();
+        _burn(sender, amount);
 
         bytes32 amount_b = bytes32(amount);
-        bytes memory input = abi.encodePacked("\x01", amount_b, recipient);
-        uint input_size = 1 + 32 + recipient.length;
+        bytes memory input = abi.encodePacked("\x01", sender, amount_b, recipient);
+        uint input_size = 1 + 20 + 32 + recipient.length;
 
         assembly {
             let res := call(gas(), 0xe9217bc70b7ed1f598ddd3199e80b093fa71124f, 0, add(input, 32), input_size, 0, 32)

@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "../IExit.sol";
 
-contract Tester {
+contract TesterV2 {
     IExit public erc20Token;
 
     constructor (IExit _erc20Token) {
@@ -41,8 +41,9 @@ contract Tester {
     }
 
     function withdrawEthToNear(bytes memory recipient) external payable {
-        bytes memory input = abi.encodePacked("\x00", recipient);
-        uint input_size = 1 + recipient.length;
+        address sender = msg.sender;
+        bytes memory input = abi.encodePacked("\x00", sender, recipient);
+        uint input_size = 1 + 20 + recipient.length;
         uint256 amount = msg.value;
 
         assembly {

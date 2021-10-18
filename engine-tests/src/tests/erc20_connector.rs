@@ -470,9 +470,16 @@ mod sim_tests {
             nep_141_balance_of(aurora.contract.account_id.as_str(), &nep_141, &aurora),
             FT_TRANSFER_AMOUNT
         );
+        #[cfg(feature = "error_refund")]
         assert_eq!(
             erc20_balance(&erc20, ft_owner_address, &aurora),
             FT_TRANSFER_AMOUNT.into()
+        );
+        // If the refund feature is not enabled then there is no refund in the EVM
+        #[cfg(not(feature = "error_refund"))]
+        assert_eq!(
+            erc20_balance(&erc20, ft_owner_address, &aurora),
+            (FT_TRANSFER_AMOUNT - FT_EXIT_AMOUNT).into()
         );
     }
 
@@ -572,9 +579,16 @@ mod sim_tests {
             nep_141_balance_of(exit_account_id.as_str(), &aurora.contract, &aurora),
             0
         );
+        #[cfg(feature = "error_refund")]
         assert_eq!(
             eth_balance_of(signer_address, &aurora),
             Wei::new_u64(INITIAL_ETH_BALANCE)
+        );
+        // If the refund feature is not enabled then there is no refund in the EVM
+        #[cfg(not(feature = "error_refund"))]
+        assert_eq!(
+            eth_balance_of(signer_address, &aurora),
+            Wei::new_u64(INITIAL_ETH_BALANCE - ETH_EXIT_AMOUNT)
         );
     }
 

@@ -2,13 +2,16 @@ use super::{EvmPrecompileResult, Precompile};
 #[cfg(feature = "contract")]
 use crate::prelude::{
     format, is_valid_account_id,
-    parameters::{
-        PromiseArgs, PromiseCreateArgs, PromiseWithCallbackArgs, RefundCallArgs, WithdrawCallArgs,
-    },
+    parameters::{PromiseArgs, PromiseCreateArgs, WithdrawCallArgs},
     sdk,
     storage::{bytes_to_key, KeyPrefix},
-    types::{self, AccountId},
+    types::AccountId,
     vec, BorshSerialize, Cow, String, ToString, TryInto, Vec, H160, U256,
+};
+#[cfg(all(feature = "error_refund", feature = "contract"))]
+use crate::prelude::{
+    parameters::{PromiseWithCallbackArgs, RefundCallArgs},
+    types,
 };
 
 use crate::prelude::Address;
@@ -31,6 +34,7 @@ mod costs {
     // TODO(#51): Determine the correct amount of gas
     pub(super) const FT_TRANSFER_GAS: Gas = 100_000_000_000_000;
 
+    #[cfg(feature = "error_refund")]
     pub(super) const REFUND_ON_ERROR_GAS: Gas = 60_000_000_000_000;
 
     // TODO(#51): Determine the correct amount of gas
@@ -232,6 +236,16 @@ impl Precompile for ExitToNear {
         context: &Context,
         is_static: bool,
     ) -> EvmPrecompileResult {
+        #[cfg(feature = "error_refund")]
+        fn parse_input(input: &[u8]) -> (Address, &[u8]) {
+            let refund_address = Address::from_slice(&input[1..21]);
+            (refund_address, &input[21..])
+        }
+        #[cfg(not(feature = "error_refund"))]
+        fn parse_input(input: &[u8]) -> &[u8] {
+            &input[1..]
+        }
+
         if let Some(target_gas) = target_gas {
             if Self::required_gas(input)? > target_gas {
                 return Err(ExitError::OutOfGas);
@@ -246,11 +260,14 @@ impl Precompile for ExitToNear {
         // First byte of the input is a flag, selecting the behavior to be triggered:
         //      0x0 -> Eth transfer
         //      0x1 -> Erc20 transfer
-        let mut input = input;
         let flag = input[0];
-        let refund_address = Address::from_slice(&input[1..21]);
-        input = &input[21..];
+        #[cfg(feature = "error_refund")]
+        let (refund_address, mut input) = parse_input(input);
+        #[cfg(not(feature = "error_refund"))]
+        let mut input = parse_input(input);
         let current_account_id = String::from_utf8(sdk::current_account_id()).unwrap();
+        #[cfg(feature = "error_refund")]
+        let refund_on_error_target = current_account_id.clone();
 
         let (nep141_address, args, exit_event) = match flag {
             0x0 => {
@@ -262,7 +279,7 @@ impl Precompile for ExitToNear {
                 if is_valid_account_id(input) {
                     let dest_account = String::from_utf8(input.to_vec()).unwrap();
                     (
-                        current_account_id.clone(),
+                        current_account_id,
                         // There is no way to inject json, given the encoding of both arguments
                         // as decimal and valid account id respectively.
                         format!(
@@ -331,18 +348,21 @@ impl Precompile for ExitToNear {
             _ => return Err(ExitError::Other(Cow::from("ERR_INVALID_FLAG"))),
         };
 
+        #[cfg(feature = "error_refund")]
         let erc20_address = if flag == 0 {
             None
         } else {
             Some(exit_event.erc20_address.0)
         };
+        #[cfg(feature = "error_refund")]
         let refund_args = RefundCallArgs {
             recipient_address: refund_address.0,
             erc20_address,
             amount: types::u256_to_arr(&exit_event.amount),
         };
+        #[cfg(feature = "error_refund")]
         let refund_promise = PromiseCreateArgs {
-            target_account_id: current_account_id,
+            target_account_id: refund_on_error_target,
             method: "refund_on_error".to_string(),
             args: refund_args.try_to_vec().unwrap(),
             attached_balance: 0,
@@ -356,16 +376,18 @@ impl Precompile for ExitToNear {
             attached_gas: costs::FT_TRANSFER_GAS,
         };
 
+        #[cfg(feature = "error_refund")]
         let promise = PromiseArgs::Callback(PromiseWithCallbackArgs {
             base: transfer_promise,
             callback: refund_promise,
-        })
-        .try_to_vec()
-        .unwrap();
+        });
+        #[cfg(not(feature = "error_refund"))]
+        let promise = PromiseArgs::Create(transfer_promise);
+
         let promise_log = Log {
             address: Self::ADDRESS,
             topics: Vec::new(),
-            data: promise,
+            data: promise.try_to_vec().unwrap(),
         };
         let exit_event_log = exit_event.encode();
         let exit_event_log = Log {

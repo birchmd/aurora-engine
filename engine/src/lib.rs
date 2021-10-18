@@ -375,6 +375,9 @@ mod contract {
         let mut engine = Engine::new(predecessor_address()).sdk_unwrap();
 
         let erc20_admin_address = current_address();
+        #[cfg(feature = "error_refund")]
+        let erc20_contract = include_bytes!("../../etc/eth-contracts/res/EvmErc20V2.bin");
+        #[cfg(not(feature = "error_refund"))]
         let erc20_contract = include_bytes!("../../etc/eth-contracts/res/EvmErc20.bin");
 
         let deploy_args = ethabi::encode(&[
