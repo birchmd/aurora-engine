@@ -97,6 +97,76 @@ fn test_deploy_largest_contract() {
 }
 
 #[test]
+fn test_dapplet_gas_limit() {
+    let (mut runner, mut signer, _) = initialize_transfer();
+
+    let constructor = test_utils::solidity::ContractConstructor::compile_from_extended_json(
+        "src/tests/res/DappletRegistry.json"
+    );
+
+    let nonce = signer.use_nonce();
+    let mut contract = runner.deploy_contract(
+        &signer.secret_key,
+        |c| c.deploy_without_constructor(nonce.into()),
+        constructor,
+    );
+
+    // Write the state to match testnet
+    let storage_kvs: Vec<(Vec<u8>, Vec<u8>)> = {
+        use std::io::BufRead;
+
+        let file = std::fs::File::open("/home/birchmd/tmp-profile-user-contract/testnet_storage.csv").unwrap();
+        let lines = std::io::BufReader::new(file).lines();
+        let mut result = Vec::with_capacity(300);
+        for line in lines {
+            let line = line.unwrap();
+            let mut split = line.trim().split(',');
+            let key = hex::decode(split.next().unwrap()).unwrap();
+            let value = hex::decode(split.next().unwrap()).unwrap();
+            result.push((key, value))
+        }
+        result
+    };
+    let trie = &mut runner.ext.fake_trie;
+    for (key, value) in storage_kvs {
+        trie.insert(key, value);
+    }
+
+    // This is the address on testnet
+    let address = Address::from_slice(&hex::decode("cbb9d408ee148024e9b5ee57097fd3142bd81b5f").unwrap());
+    contract.address = address;
+
+    let get_module_info_batch = |nonce: U256,
+                                 ctx_ids: Vec<String>,
+                                 users: Vec<Vec<u8>>,
+                                 max_buf_len: u32| {
+        contract.call_method_with_args(
+            "getModuleInfoBatch",
+            &[
+                ethabi::Token::Array(ctx_ids.into_iter().map(ethabi::Token::String).collect()),
+                ethabi::Token::Array(users.into_iter().map(ethabi::Token::FixedBytes).collect()),
+                ethabi::Token::Uint(max_buf_len.into()),
+            ],
+            nonce,
+        )
+    };
+
+    let tx = get_module_info_batch(
+        signer.use_nonce().into(),
+        vec!["twitter.com".to_owned()],
+        vec![hex::decode(
+            "000000000000000000000000F64849376812667BDa7D902666229f8b8dd90687"
+        )
+        .unwrap()],
+        0
+    );
+
+    let (result, profile) = runner.profiled_view_call(test_utils::as_view_call(tx, address));
+    assert!(result.unwrap().is_ok());
+    panic!("{}", profile.all_gas());
+}
+
+#[test]
 fn test_log_address() {
     let (mut runner, mut signer, _) = initialize_transfer();
 
