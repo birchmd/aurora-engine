@@ -6,7 +6,7 @@ authors = ["Aurora <hello@aurora.dev>"]
 description = "Aurora engine standalone storage library. Provides the storage backend used by the standalone engine."
 homepage = "https://github.com/aurora-is-near/aurora-engine"
 repository = "https://github.com/aurora-is-near/aurora-engine"
-license = "CC0-1.0"
+license = "GPLv3"
 publish = false
 autobenches = false
 
@@ -24,6 +24,8 @@ postgres = "0.19.2"
 serde = "1.0.130"
 serde_json = "1.0.72"
 base64 = "0.13.0"
+borealis-indexer-types = { path = "/home/birchmd/upstream/aurora-is-near/borealis-indexer/borealis-indexer-types/" }
+near-primitives = { git = "https://github.com/near/nearcore", rev = "2a9f1fe5003b305cfa8f44c973ea84870531ac1d" }
 
 [features]
 default = []

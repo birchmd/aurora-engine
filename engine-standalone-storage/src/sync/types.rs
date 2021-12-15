@@ -1,7 +1,10 @@
 use aurora_engine::parameters;
 use aurora_engine::transaction::EthTransactionKind;
 use aurora_engine_types::account_id::AccountId;
+use aurora_engine_types::TryFrom;
 use aurora_engine_types::H256;
+use borsh::BorshDeserialize;
+use near_primitives::views::ActionView;
 
 /// Type describing the format of messages sent to the storage layer for keeping
 /// it in sync with the blockchain.
@@ -53,4 +56,47 @@ pub enum TransactionKind {
     FtOnTransfer(parameters::NEP141FtOnTransferArgs),
     /// Bytes here will be parsed into `aurora_engine::proof::Proof`
     Deposit(Vec<u8>),
+}
+
+impl TransactionKind {
+    pub fn parse_action(action: &ActionView) -> Option<(Self, u128)> {
+        if let ActionView::FunctionCall {
+            method_name,
+            args,
+            deposit,
+            ..
+        } = action
+        {
+            let bytes = base64::decode(&args).ok()?;
+            let transaction_kind = match method_name.as_str() {
+                "submit" => {
+                    let eth_tx =
+                        aurora_engine::transaction::EthTransactionKind::try_from(bytes.as_slice())
+                            .ok()?;
+                    Self::Submit(eth_tx)
+                }
+                "call" => {
+                    let call_args = parameters::CallArgs::deserialize(&bytes)?;
+                    Self::Call(call_args)
+                }
+                "deploy_code" => Self::Deploy(bytes),
+                "deploy_erc20_token" => {
+                    let deploy_args =
+                        parameters::DeployErc20TokenArgs::try_from_slice(&bytes).ok()?;
+                    Self::DeployErc20(deploy_args)
+                }
+                "ft_on_transfer" => {
+                    let json_args = aurora_engine::json::parse_json(bytes.as_slice())?;
+                    let transfer_args =
+                        parameters::NEP141FtOnTransferArgs::try_from(json_args).ok()?;
+                    Self::FtOnTransfer(transfer_args)
+                }
+                "deposit" => Self::Deposit(bytes),
+                _ => return None,
+            };
+            return Some((transaction_kind, *deposit));
+        }
+
+        None
+    }
 }

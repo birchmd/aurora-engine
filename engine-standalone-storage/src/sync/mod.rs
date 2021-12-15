@@ -9,6 +9,82 @@ use types::{Message, TransactionKind};
 
 const AURORA_ACCOUNT_ID: &str = "aurora";
 
+pub fn consume_streamer_message(
+    storage: &mut crate::Storage,
+    message: borealis_indexer_types::types::StreamerMessage,
+) -> Result<(), error::Error> {
+    let block_message = types::BlockMessage {
+        height: message.block.header.height,
+        hash: message.block.header.hash.0.into(),
+        metadata: crate::BlockMetadata {
+            timestamp: env::Timestamp::new(message.block.header.timestamp_nanosec),
+            random_seed: message.block.header.random_value.0.into(),
+        },
+    };
+    let block_hash = block_message.hash;
+
+    consume_message(storage, Message::Block(block_message))?;
+
+    // TODO:
+    // * Question: Will "Transactions" here always simply show the conversion to receipt or the whole execution?
+    // * Even if the Transaction entry shows the whole execution, the process as is does not capture Aurora calls
+    //   internal to some larger transaction (e.g. user X calls contract Y which calls Aurora). These would only
+    //   show up in the receipts.
+    // * If we only look at the receipts, we will not know what transaction created them unless we keep state from message to message.
+
+    let mut position_counter = 0;
+    let transaction_messages = message
+        .shards
+        .iter()
+        .flat_map(|shard| {
+            shard
+                .chunk
+                .iter()
+                .flat_map(|chunk| chunk.transactions.iter())
+        })
+        .filter_map(|transaction| {
+            if transaction.transaction.receiver_id.as_ref() != AURORA_ACCOUNT_ID {
+                return None;
+            }
+
+            match transaction.outcome.execution_outcome.outcome.status {
+                near_primitives::views::ExecutionStatusView::Unknown => return None,
+                near_primitives::views::ExecutionStatusView::Failure(_) => return None,
+                _ => (),
+            };
+
+            let signer = transaction.transaction.signer_id.as_ref();
+            let caller = signer;
+            let transaction_hash = transaction.transaction.hash;
+
+            let (transaction_kind, attached_near) = transaction
+                .transaction
+                .actions
+                .iter()
+                .find_map(types::TransactionKind::parse_action)?;
+
+            let transaction_message = types::TransactionMessage {
+                block_hash,
+                near_tx_hash: transaction_hash.0.into(),
+                position: position_counter,
+                succeeded: true, // we drop failed transactions above
+                signer: signer.parse().ok()?,
+                caller: caller.parse().ok()?,
+                attached_near,
+                transaction: transaction_kind,
+            };
+            position_counter += 1;
+
+            Some(transaction_message)
+        });
+
+    for t in transaction_messages {
+        consume_message(storage, Message::Transaction(Box::new(t)))?;
+    }
+
+    Ok(())
+}
+
 pub fn consume_message(storage: &mut crate::Storage, message: Message) -> Result<(), error::Error> {
     match message {
         Message::Block(block_message) => {
