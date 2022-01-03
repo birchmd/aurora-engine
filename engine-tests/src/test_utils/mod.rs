@@ -35,6 +35,7 @@ pub(crate) const DEPLOY_ERC20: &str = "deploy_erc20_token";
 
 pub(crate) mod erc20;
 pub(crate) mod exit_precompile;
+pub(crate) mod mocked_external;
 pub(crate) mod one_inch;
 pub(crate) mod random;
 pub(crate) mod rust;
@@ -183,10 +184,11 @@ impl AuroraRunner {
             input,
         );
 
+        let mut ext = mocked_external::MockedExternalWithTrie::new(&mut self.ext);
         let (maybe_outcome, maybe_error) = near_vm_runner::run(
             &self.code,
             method_name,
-            &mut self.ext,
+            &mut ext,
             self.context.clone(),
             &self.wasm_config,
             &self.fees_config,
@@ -536,7 +538,7 @@ impl Default for AuroraRunner {
 /// (which was removed in https://github.com/near/nearcore/pull/4438).
 #[derive(Default, Clone)]
 pub(crate) struct ExecutionProfile {
-    host_breakdown: ProfileData,
+    pub host_breakdown: ProfileData,
     wasm_gas: u64,
 }
 
