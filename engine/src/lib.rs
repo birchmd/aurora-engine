@@ -500,7 +500,9 @@ mod contract {
         let args: GetStorageAtArgs = io.read_input_borsh().sdk_unwrap();
         let address = args.address;
         let generation = engine::get_generation(&io, &address);
-        let value = engine::get_storage(&io, &args.address, &H256(args.key), generation);
+        let mut cache = engine::StorageCache::default();
+        let value =
+            engine::get_storage(&mut cache, &io, &args.address, &H256(args.key), generation);
         io.return_output(&value.0)
     }
 

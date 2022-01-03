@@ -1,4 +1,5 @@
 use crate::parameters::{CallArgs, NEP141FtOnTransferArgs, ResultLog, SubmitResult, ViewCallArgs};
+use aurora_engine_types::{BTreeMap, BTreeSet};
 use core::mem;
 use evm::backend::{Apply, ApplyBackend, Backend, Basic, Log};
 use evm::executor;
@@ -14,9 +15,9 @@ use crate::parameters::{DeployErc20TokenArgs, NewCallArgs, TransactionStatus};
 use crate::prelude::precompiles::native::{ExitToEthereum, ExitToNear};
 use crate::prelude::precompiles::Precompiles;
 use crate::prelude::{
-    address_to_key, bytes_to_key, sdk, storage_to_key, u256_to_arr, vec, AccountId, Address,
-    BorshDeserialize, BorshSerialize, KeyPrefix, PromiseArgs, PromiseCreateArgs, ToString, TryFrom,
-    TryInto, Vec, Wei, ERC20_MINT_SELECTOR, H160, H256, U256,
+    address_to_key, bytes_to_key, contract_blob_storage_key, sdk, u256_to_arr, vec, AccountId,
+    Address, BorshDeserialize, BorshSerialize, KeyPrefix, PromiseArgs, PromiseCreateArgs, ToString,
+    TryFrom, TryInto, Vec, Wei, ERC20_MINT_SELECTOR, H160, H256, U256,
 };
 use crate::transaction::{EthTransactionKind, NormalizedEthTransaction};
 use aurora_engine_precompiles::PrecompileConstructorContext;
@@ -401,6 +402,7 @@ pub struct Engine<'env, I: IO, E: Env> {
     origin: Address,
     gas_price: U256,
     current_account_id: AccountId,
+    cache: core::cell::RefCell<StorageCache>,
     io: I,
     env: &'env E,
 }
@@ -432,6 +434,7 @@ impl<'env, I: IO + Copy, E: Env> Engine<'env, I, E> {
             origin,
             gas_price: U256::zero(),
             current_account_id,
+            cache: Default::default(),
             io,
             env,
         }
@@ -1176,32 +1179,41 @@ pub fn get_balance<I: IO>(io: &I, address: &Address) -> Wei {
     Wei::new(raw)
 }
 
-pub fn remove_storage<I: IO>(io: &mut I, address: &Address, key: &H256, generation: u32) {
-    io.remove_storage(storage_to_key(address, key, generation).as_ref());
+pub type ContractStorage = BTreeMap<[u8; 32], [u8; 32]>;
+
+#[derive(Default)]
+pub struct StorageCache {
+    pub contracts: BTreeMap<Address, ContractStorage>,
+    pub modified_contracts: BTreeSet<Address>,
 }
 
-pub fn set_storage<I: IO>(
-    io: &mut I,
+pub fn remove_storage(cache: &mut StorageCache, address: &Address, key: &H256) {
+    if let Some(storage) = cache.contracts.get_mut(address) {
+        storage.remove(&key.0);
+        cache.modified_contracts.insert(*address);
+    }
+}
+
+pub fn set_storage(cache: &mut StorageCache, address: &Address, key: &H256, value: &H256) {
+    cache.modified_contracts.insert(*address);
+    let storage = cache.contracts.entry(*address).or_default();
+    storage.insert(key.0, value.0);
+}
+
+pub fn get_storage<I: IO>(
+    cache: &mut StorageCache,
+    io: &I,
     address: &Address,
     key: &H256,
-    value: &H256,
     generation: u32,
-) {
-    io.write_storage(storage_to_key(address, key, generation).as_ref(), &value.0);
-}
-
-pub fn get_storage<I: IO>(io: &I, address: &Address, key: &H256, generation: u32) -> H256 {
-    io.read_storage(storage_to_key(address, key, generation).as_ref())
-        .and_then(|value| {
-            if value.len() == 32 {
-                let mut buf = [0u8; 32];
-                value.copy_to_slice(&mut buf);
-                Some(H256(buf))
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(H256::default)
+) -> H256 {
+    let storage = cache.contracts.entry(*address).or_insert_with(|| {
+        io.read_storage(&contract_blob_storage_key(address, generation))
+            .and_then(|v| v.to_value().ok())
+            .unwrap_or_default()
+    });
+    let value = storage.get(&key.0).copied().unwrap_or_default();
+    H256(value)
 }
 
 pub fn is_account_empty<I: IO>(io: &I, address: &Address) -> bool {
@@ -1426,7 +1438,13 @@ impl<'env, I: IO + Copy, E: Env> evm::backend::Backend for Engine<'env, I, E> {
     fn storage(&self, address: H160, index: H256) -> H256 {
         let address = Address::new(address);
         let generation = get_generation(&self.io, &address);
-        get_storage(&self.io, &address, &index, generation)
+        get_storage(
+            &mut self.cache.borrow_mut(),
+            &self.io,
+            &address,
+            &index,
+            generation,
+        )
     }
 
     /// Get original storage value of address at index, if available.
@@ -1449,7 +1467,7 @@ impl<'env, J: IO + Copy, E: Env> ApplyBackend for Engine<'env, J, E> {
         let mut writes_counter: usize = 0;
         let mut code_bytes_written: usize = 0;
         for apply in values {
-            match apply {
+            let (address, generation) = match apply {
                 Apply::Modify {
                     address,
                     basic,
@@ -1483,11 +1501,10 @@ impl<'env, J: IO + Copy, E: Env> ApplyBackend for Engine<'env, J, E> {
 
                     for (index, value) in storage {
                         if value == H256::default() {
-                            remove_storage(&mut self.io, &address, &index, next_generation)
+                            remove_storage(self.cache.get_mut(), &address, &index)
                         } else {
-                            set_storage(&mut self.io, &address, &index, &value, next_generation)
+                            set_storage(self.cache.get_mut(), &address, &index, &value)
                         }
-                        writes_counter += 1;
                     }
 
                     // We only need to remove the account if:
@@ -1502,11 +1519,22 @@ impl<'env, J: IO + Copy, E: Env> ApplyBackend for Engine<'env, J, E> {
                         remove_account(&mut self.io, &address, generation);
                         writes_counter += 1;
                     }
+
+                    (address, next_generation)
                 }
                 Apply::Delete { address } => {
                     let address = Address::new(address);
                     let generation = get_generation(&self.io, &address);
                     remove_account(&mut self.io, &address, generation);
+                    writes_counter += 1;
+                    (address, generation)
+                }
+            };
+            let cache = self.cache.borrow();
+            if cache.modified_contracts.contains(&address) {
+                if let Some(storage) = cache.contracts.get(&address) {
+                    let key = contract_blob_storage_key(&address, generation);
+                    self.io.write_borsh(key.as_ref(), storage);
                     writes_counter += 1;
                 }
             }

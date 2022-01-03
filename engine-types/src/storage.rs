@@ -70,46 +70,11 @@ pub fn address_to_key(prefix: KeyPrefix, address: &Address) -> [u8; 22] {
     result
 }
 
-pub enum StorageKeyKind {
-    Normal([u8; 54]),
-    Generation([u8; 58]),
-}
-
-impl AsRef<[u8]> for StorageKeyKind {
-    fn as_ref(&self) -> &[u8] {
-        use StorageKeyKind::*;
-        match self {
-            Normal(v) => v.as_slice(),
-            Generation(v) => v.as_slice(),
-        }
-    }
-}
-
-pub fn storage_to_key(address: &Address, key: &H256, generation: u32) -> StorageKeyKind {
-    if generation == 0 {
-        StorageKeyKind::Normal(normal_storage_key(address, key))
-    } else {
-        StorageKeyKind::Generation(generation_storage_key(address, key, generation))
-    }
-}
-
-#[allow(dead_code)]
-fn normal_storage_key(address: &Address, key: &H256) -> [u8; 54] {
-    let mut result = [0u8; 54];
-    result[0] = VersionPrefix::V1 as u8;
-    result[1] = KeyPrefix::Storage as u8;
-    result[2..22].copy_from_slice(address.as_bytes());
-    result[22..54].copy_from_slice(&key.0);
-    result
-}
-
-#[allow(dead_code)]
-fn generation_storage_key(address: &Address, key: &H256, generation: u32) -> [u8; 58] {
-    let mut result = [0u8; 58];
+pub fn contract_blob_storage_key(address: &Address, generation: u32) -> [u8; 26] {
+    let mut result = [0u8; 26];
     result[0] = VersionPrefix::V1 as u8;
     result[1] = KeyPrefix::Storage as u8;
     result[2..22].copy_from_slice(address.as_bytes());
     result[22..26].copy_from_slice(&generation.to_le_bytes());
-    result[26..58].copy_from_slice(&key.0);
     result
 }

@@ -21,6 +21,7 @@ mod v0 {
         boxed::Box,
         collections::BTreeMap as HashMap,
         collections::BTreeMap,
+        collections::BTreeSet,
         fmt, format, str,
         string::String,
         string::ToString,
@@ -36,9 +37,10 @@ mod v0 {
     #[cfg(feature = "std")]
     pub use std::{
         borrow::Cow, borrow::Cow::Borrowed, borrow::ToOwned, boxed::Box, cmp::Ordering,
-        collections::BTreeMap, collections::HashMap, convert::TryFrom, convert::TryInto,
-        error::Error, fmt, fmt::Display, format, marker::PhantomData, mem, ops::Add, ops::Div,
-        ops::Mul, ops::Sub, ops::SubAssign, str, string::String, string::ToString, vec, vec::Vec,
+        collections::BTreeMap, collections::BTreeSet, collections::HashMap, convert::TryFrom,
+        convert::TryInto, error::Error, fmt, fmt::Display, format, marker::PhantomData, mem,
+        ops::Add, ops::Div, ops::Mul, ops::Sub, ops::SubAssign, str, string::String,
+        string::ToString, vec, vec::Vec,
     };
 }
 
