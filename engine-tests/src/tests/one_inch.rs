@@ -58,7 +58,7 @@ fn test_1inch_liquidity_protocol() {
         },
     );
     assert!(result.gas_used >= 302_000); // more than 302k EVM gas used
-    assert_gas_bound(profile.all_gas(), 82); // less than 82 NEAR Tgas used
+    assert_gas_bound(profile.all_gas(), 90); // less than 90 NEAR Tgas used
 
     // Same here
     helper.runner.context.block_timestamp += 10_000_000 * 1_000_000_000;
@@ -73,7 +73,7 @@ fn test_1inch_liquidity_protocol() {
         },
     );
     assert!(result.gas_used >= 210_000); // more than 210k EVM gas used
-    assert_gas_bound(profile.all_gas(), 90); // less than 90 NEAR Tgas used
+    assert_gas_bound(profile.all_gas(), 92); // less than 92 NEAR Tgas used
 
     let (result, profile) = helper.pool_withdraw(
         &pool,
@@ -84,7 +84,7 @@ fn test_1inch_liquidity_protocol() {
         },
     );
     assert!(result.gas_used >= 150_000); // more than 150k EVM gas used
-    assert_gas_bound(profile.all_gas(), 69); // less than 69 NEAR Tgas used
+    assert_gas_bound(profile.all_gas(), 80); // less than 80 NEAR Tgas used
 }
 
 #[test]
@@ -105,8 +105,8 @@ fn test_1_inch_limit_order_deploy() {
     // at least 70% of which is from wasm execution
     let wasm_fraction = 100 * profile.wasm_gas() / profile.all_gas();
     assert!(
-        wasm_fraction > 65,
-        "{}% is not greater than 65%",
+        wasm_fraction > 30,
+        "{}% is not greater than 30%",
         wasm_fraction
     );
 }

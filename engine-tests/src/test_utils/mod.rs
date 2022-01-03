@@ -498,8 +498,8 @@ impl Default for AuroraRunner {
             panic!("AuroraRunner requires mainnet-test or testnet-test feature enabled.")
         };
         let mut wasm_config = VMConfig::default();
-        // See https://github.com/near/nearcore/pull/4979/
-        wasm_config.regular_op_cost = 2207874;
+        // See https://github.com/near/nearcore/pull/5365/
+        wasm_config.regular_op_cost = 822_756;
 
         Self {
             aurora_account_id: aurora_account_id.clone(),
@@ -558,6 +558,12 @@ impl ExecutionProfile {
 
     pub fn all_gas(&self) -> u64 {
         self.wasm_gas + self.host_breakdown.host_gas() + self.host_breakdown.action_gas()
+    }
+
+    #[allow(dead_code)]
+    pub fn touching_trie_gas(&self) -> u64 {
+        self.host_breakdown
+            .get_ext_cost(near_primitives_core::config::ExtCosts::touching_trie_node)
     }
 }
 
