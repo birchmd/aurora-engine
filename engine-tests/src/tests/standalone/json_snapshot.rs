@@ -2,10 +2,15 @@ use crate::test_utils::standalone;
 use aurora_engine_types::types::Address;
 use aurora_engine_types::{H160, U256, TryFrom};
 use engine_standalone_storage::json_snapshot;
+use aurora_engine::parameters::SubmitResult;
 
 const NONCE_PREFIX: [u8; 2] = [0x07, 0x01];
 const BALANCE_PREFIX: [u8; 2] = [0x07, 0x02];
 const CODE_PREFIX: [u8; 2] = [0x07, 0x03];
+
+fn compare_results(x: &SubmitResult, y: &SubmitResult) -> bool {
+    x.status == y.status && x.logs == y.logs //&& x.gas_used == y.gas_used
+}
 
 #[test]
 fn test_replay_mainnet_transactions() {
@@ -15,7 +20,7 @@ fn test_replay_mainnet_transactions() {
     )
     .unwrap();
     let mut runner = crate::test_utils::AuroraRunner::default();
-    runner.wasm_config.limit_config.max_gas_burnt = 300_000_000_000_000;
+    runner.wasm_config.limit_config.max_gas_burnt = 5_000_000_000_000_000;
     runner.context.storage_usage = 500_000_000;
     runner.consume_json_snapshot(snapshot);
 
@@ -28,10 +33,17 @@ fn test_replay_mainnet_transactions() {
     // from all the successful transactions to ensure accuracy of the run.
 
     for (i, tx_spec) in txs.split('\n').enumerate() {
-        let mut parser = tx_spec.split(' ');
-        let tx_hex = parser.next().unwrap();
-        let tx_status = parser.next().unwrap();
+        if tx_spec.is_empty() {
+            continue;
+        }
+        let mut tokens = tx_spec.split(' ');
+        let block_height: u64 = tokens.next().unwrap().parse().unwrap();
+        let timestamp_ns: u64 = tokens.next().unwrap().parse().unwrap();
+        let tx_hex = tokens.next().unwrap();
+        let tx_status = tokens.next().unwrap();
         let tx_bytes = hex::decode(tx_hex).unwrap();
+        runner.context.block_index = block_height;
+        runner.context.block_timestamp = timestamp_ns;
         /*let tx = aurora_engine::transaction::EthTransactionKind::try_from(tx_bytes.as_slice()).unwrap();
         if let aurora_engine::transaction::EthTransactionKind::Legacy(legacy) = tx {
             let address = legacy.sender().unwrap();
@@ -43,7 +55,8 @@ fn test_replay_mainnet_transactions() {
             runner.ext.underlying.fake_trie.insert(nonce_key.to_vec(), nonce_value.to_vec());
         }*/
         if tx_status == "SUCCESS" {
-            let (outcome, error) = runner.call("submit", "relay.aurora", tx_bytes);
+            let success_bytes = hex::decode(tokens.next().unwrap()).unwrap();
+            let (outcome, error) = runner.call_with_signer_and_maybe_update("submit", "relay.aurora", "relay.aurora", tx_bytes, false);
             let outcome = outcome.unwrap();
             let profile = crate::test_utils::ExecutionProfile::new(&outcome);
             if let Some(error) = error {
@@ -51,23 +64,45 @@ fn test_replay_mainnet_transactions() {
                 println!("{:?}\n{:?}\n{:?}", profile.host_breakdown, profile.wasm_gas(), profile.all_gas());
                 panic!("{:?}", error);
             }
-            // TODO: validate execution against mainnet?
-            //let submit_result = aurora_engine::parameters::SubmitResult::try_from_slice(&outcome.return_data.as_value().unwrap()).unwrap();
-            //assert!(submit_result.status.is_ok(), "{:?}", submit_result);
+            let submit_result = SubmitResult::try_from_slice(&outcome.return_data.as_value().unwrap()).unwrap();
+            let mainnet_result = SubmitResult::try_from_slice(&success_bytes).unwrap();
+            if !compare_results(&mainnet_result, &submit_result) {
+                println!("{:?}", i);
+                println!("MAINNET: {:?}", mainnet_result);
+                println!("REPLAY: {:?}", submit_result);
+                panic!("SubmitResult mismatch!");
+            }
         } else if tx_status == "GAS_FAIL" {
             let one_shot = runner.one_shot();
-            let (outcome, error) = one_shot.call("submit", "relay.aurora", tx_bytes);
+            let (outcome, error) = one_shot.call_without_update("submit", "relay.aurora", tx_bytes);
             let outcome = outcome.unwrap();
             let profile = crate::test_utils::ExecutionProfile::new(&outcome);
             if let Some(error) = error {
-                println!("{:?}", i);
+                println!("FAILED {:?}", i);
                 println!("Transaction failed after gas increase: {:?}", error);
-                println!("{:?}\n{:?}\n{:?}\n#####################", profile.host_breakdown, profile.wasm_gas(), profile.all_gas());
+                println!("{:?}\nFAILED_WASM {:?}\nFAILED_WASM {:?}\n#####################", profile.host_breakdown, profile.wasm_gas(), profile.all_gas());
+            } else if profile.all_gas() > 300_000_000_000_000 {
+                println!("FAILED {:?}", i);
+                println!("Transaction failed after gas increase: FunctionCallError(HostError(GasLimitExceeded))");
+                println!("{:?}\nFAILED_WASM {:?}\nFAILED_TOTAL {:?}\n#####################", profile.host_breakdown, profile.wasm_gas(), profile.all_gas());
+            } else if profile.all_gas() < 200_000_000_000_000 {
+                println!("FAILED {:?}", i);
+                println!("Transaction failed after gas increase: Gas usage now too low!");
+                println!("{:?}\nFAILED_WASM {:?}\nFAILED_TOTAL {:?}\n#####################", profile.host_breakdown, profile.wasm_gas(), profile.all_gas());
+                panic!("Too low gas estimate!");
+            } else {
+                println!("PASSED {:?}", i);
+                println!("Previously failed transaction passed after gas increase");
+                println!("{:?}\nPASSED_WASM {:?}\nPASSED_TOTAL {:?}\n#####################", profile.host_breakdown, profile.wasm_gas(), profile.all_gas());
             }
         } else {
             panic!("Unknown status: {}", tx_status);
         }
     }
+    let final_state: String = runner.ext.underlying.fake_trie.iter().map(|(k, v)| {
+        format!("{} {}\n", hex::encode(k), hex::encode(v))
+    }).collect();
+    std::fs::write("final_state.txt", final_state).unwrap();
 }
 
 #[test]

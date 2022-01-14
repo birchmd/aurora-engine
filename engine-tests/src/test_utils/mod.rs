@@ -123,6 +123,34 @@ impl<'a> OneShotAuroraRunner<'a> {
             caller_account_id,
             caller_account_id,
             input,
+            true,
+        );
+
+        near_vm_runner::run(
+            &self.base.code,
+            method_name,
+            &mut self.ext,
+            self.context.clone(),
+            &self.base.wasm_config,
+            &self.base.fees_config,
+            &[],
+            self.base.current_protocol_version,
+            Some(&self.base.cache),
+        )
+    }
+
+    pub fn call_without_update(
+        mut self,
+        method_name: &str,
+        caller_account_id: &str,
+        input: Vec<u8>,
+    ) -> (Option<VMOutcome>, Option<VMError>) {
+        AuroraRunner::update_context(
+            &mut self.context,
+            caller_account_id,
+            caller_account_id,
+            input,
+            false,
         );
 
         near_vm_runner::run(
@@ -153,9 +181,12 @@ impl AuroraRunner {
         caller_account_id: &str,
         signer_account_id: &str,
         input: Vec<u8>,
+        update_block: bool,
     ) {
-        context.block_index += 1;
-        context.block_timestamp += 1_000_000_000;
+        if update_block {
+            context.block_index += 1;
+            context.block_timestamp += 1_000_000_000;
+        }
         context.input = input;
         context.signer_account_id = as_account_id(signer_account_id);
         context.predecessor_account_id = as_account_id(caller_account_id);
@@ -177,11 +208,23 @@ impl AuroraRunner {
         signer_account_id: &str,
         input: Vec<u8>,
     ) -> (Option<VMOutcome>, Option<VMError>) {
+        self.call_with_signer_and_maybe_update(method_name, caller_account_id, signer_account_id, input, true)
+    }
+
+    pub fn call_with_signer_and_maybe_update(
+        &mut self,
+        method_name: &str,
+        caller_account_id: &str,
+        signer_account_id: &str,
+        input: Vec<u8>,
+        update_block: bool,
+    ) -> (Option<VMOutcome>, Option<VMError>) {
         Self::update_context(
             &mut self.context,
             caller_account_id,
             signer_account_id,
             input,
+            update_block,
         );
 
         let (maybe_outcome, maybe_error) = near_vm_runner::run(

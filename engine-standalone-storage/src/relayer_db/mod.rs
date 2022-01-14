@@ -189,6 +189,35 @@ mod test {
     use aurora_engine::{connector, engine, parameters};
     use aurora_engine_types::H256;
 
+    #[test]
+    fn test_tmp() {
+        let mut connection = super::connect_without_tls(&Default::default()).unwrap();
+        let mut tx_rows = super::read_transaction_data(&mut connection).unwrap();
+
+        let min_height: u64 = 56838299;
+        let max_height: u64 = 57114046;
+        let base_path = std::path::Path::new("/home/birchmd/tmp-profile-user-contract/tx_data_56838299/");
+
+        let mut blocks_missing_transactions = std::collections::BTreeSet::new();
+
+        while let Some(row) = tx_rows.next().unwrap() {
+            let tx: super::types::TransactionRow = row.into();
+            if tx.block >= min_height && tx.block <= max_height {
+                if blocks_missing_transactions.contains(&tx.block) {
+                    continue;
+                }
+                let tx_hash = bs58::encode(tx.near_hash.as_bytes()).into_string();
+                let p = base_path.join(format!("{}.json", tx_hash));
+                if !p.exists() {
+                    blocks_missing_transactions.insert(tx.block);
+                }
+            }
+        }
+
+        let all: String = blocks_missing_transactions.into_iter().map(|h| format!("{:?}\n", h)).collect();
+        std::fs::write("missing_txs.txt", all).unwrap();
+    }
+
     /// Requires a running postgres server to work. A snapshot of the DB can be
     /// downloaded using the script from https://github.com/aurora-is-near/partner-relayer-deploy
     /// The postgres DB can be started in Docker using the following command:

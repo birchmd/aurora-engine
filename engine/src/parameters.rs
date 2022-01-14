@@ -40,7 +40,7 @@ pub struct MetaCallArgs {
 }
 
 /// Borsh-encoded log for use in a `SubmitResult`.
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
 pub struct ResultLog {
     pub address: Address,
     pub topics: Vec<RawU256>,
@@ -105,7 +105,7 @@ impl AsRef<[u8]> for TransactionStatus {
 
 /// Borsh-encoded parameters for the `call`, `call_with_args`, `deploy_code`,
 /// and `deploy_with_input` methods.
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
 pub struct SubmitResult {
     version: u8,
     pub status: TransactionStatus,
