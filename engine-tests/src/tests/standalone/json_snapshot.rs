@@ -13,6 +13,56 @@ fn compare_results(x: &SubmitResult, y: &SubmitResult) -> bool {
 }
 
 #[test]
+fn test_show_snapshots_are_poststates() {
+    // test executing transaction 5uihgByR13EC2vfp3jAgyoQMEGJ4jmK814s6ueNGMLeS
+    // Its receipt was executed in block 57652394 but our state snapshots are post-states,
+    // so we need to use the snapshot from 57652393.
+    use borsh::BorshDeserialize;
+    let snapshot = json_snapshot::types::JsonSnapshot::load_from_file(
+        "/home/birchmd/aurora-engine/contract.aurora.block57652393.json",
+    )
+    .unwrap();
+    let my_address = Address::try_from_slice(&hex::decode("e0ebd9f22027730dae8e6ad5f649564bb1684aca").unwrap()).unwrap();
+    let my_nonce_key = aurora_engine_types::storage::address_to_key(aurora_engine_types::storage::KeyPrefix::Nonce, &my_address);
+    for entry in snapshot.result.values.iter() {
+        let key = base64::decode(&entry.key).unwrap();
+        let value = base64::decode(&entry.value).unwrap();
+        if &key == &my_nonce_key {
+            let nonce_value = aurora_engine_types::U256::from_big_endian(&value);
+            println!("{:?}", nonce_value);
+            break;
+        }
+    }
+    let tx_b64 = "+QFtgwIAg4CDVu2/lCy0XttFF9WUev3jvqv5WlglBoWLgLkBBOjjNwAAAAAAAAAAAAAAAADELDCsbMFfrJvZOGGLyqGh+uhQHQAAAAAAAAAAAAAAALEr/KWlWAaq9k6ZUhkYpL8PxAgCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASXQEsj/SLzoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEi3+mjJbEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFoAAAAAAAAAAAAAAADg69nyICdzDa6OatX2SVZLsWhKygAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABh5y+1hJyKgsig/IvH1narM/LJGFFNvEHXevNDk6r8lhx2YzbCx4RDfgagepk2ln8JpDQxRzmmd8uSsil9IH9MBLxH9O6Nd/iMThw=";
+    let tx_bytes = base64::decode(tx_b64).unwrap();
+    let tx = aurora_engine::transaction::EthTransactionKind::try_from(tx_bytes.as_slice()).unwrap();
+    match tx {
+        aurora_engine::transaction::EthTransactionKind::Legacy(tx) => println!("{:?}", tx.transaction.nonce),
+        _ => panic!("Err, what?"),
+    }
+
+    let mut runner = crate::test_utils::AuroraRunner::default();
+    runner.wasm_config.limit_config.max_gas_burnt = 5_000_000_000_000_000;
+    runner.context.storage_usage = 500_000_000;
+    runner.consume_json_snapshot(snapshot);
+
+    runner.context.block_index = 57652393;
+    runner.context.block_timestamp = 1642530984685706638;
+    let (outcome, error) = runner.call_with_signer_and_maybe_update("submit", "relay.aurora", "relay.aurora", tx_bytes, false);
+    let outcome = outcome.unwrap();
+    let profile = crate::test_utils::ExecutionProfile::new(&outcome);
+    println!("{:?}\n{:?}\n{:?}", profile.host_breakdown, profile.wasm_gas(), profile.all_gas());
+    if let Some(error) = error {
+        panic!("{:?}", error);
+    }
+    let mainnet_result_b64 = "BwGEAAAACMN5oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACZVbmlzd2FwVjJSb3V0ZXI6IElOU1VGRklDSUVOVF9CX0FNT1VOVAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaI0AAAAAAAAAAAAA";
+    let success_bytes = base64::decode(mainnet_result_b64).unwrap();
+    let mainnet_result = SubmitResult::try_from_slice(&success_bytes).unwrap();
+    let submit_result = SubmitResult::try_from_slice(&outcome.return_data.as_value().unwrap()).unwrap();
+    assert!(compare_results(&mainnet_result, &submit_result));
+}
+
+#[test]
 fn test_replay_mainnet_transactions() {
     use borsh::BorshDeserialize;
     let snapshot = json_snapshot::types::JsonSnapshot::load_from_file(
