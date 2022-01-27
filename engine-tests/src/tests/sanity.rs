@@ -135,6 +135,48 @@ fn test_log_address() {
     assert_eq!(log_address, greet_contract.address);
 }
 
+fn default_data(t: &ethabi::ParamType) -> ethabi::Token {
+    match t {
+        ethabi::ParamType::Address => ethabi::Token::Address(H160::zero()),
+        ethabi::ParamType::Bytes => ethabi::Token::Bytes(Vec::new()),
+        ethabi::ParamType::Int(_) => ethabi::Token::Int(U256::zero()),
+        ethabi::ParamType::Uint(_) => ethabi::Token::Uint(U256::zero()),
+        ethabi::ParamType::Bool => ethabi::Token::Bool(true),
+        ethabi::ParamType::String => ethabi::Token::String(String::new()),
+        ethabi::ParamType::Array(_) => ethabi::Token::Array(Vec::new()),
+        ethabi::ParamType::FixedBytes(size) => ethabi::Token::FixedBytes(std::iter::repeat(0).take(*size).collect()),
+        ethabi::ParamType::FixedArray(inner_t, size) => ethabi::Token::Array(std::iter::repeat(default_data(inner_t.as_ref())).take(*size).collect()),
+        ethabi::ParamType::Tuple(inner) => ethabi::Token::Tuple(inner.iter().map(default_data).collect()),
+    }
+}
+
+#[test]
+fn test_tmp() {
+    let constructor = test_utils::solidity::ContractConstructor::compile_from_source(
+        "/home/birchmd/tmp-oin-finance/OINDAO3.0-Aurora",
+        "/home/birchmd/tmp-oin-finance/target",
+        "Manage.sol",
+        "Manage",
+    );
+
+    let sigs: Vec<String> = constructor.abi.functions().map(|f| {
+        let sig = f.signature();
+        let dummy_inputs: Vec<ethabi::Token> = f.inputs.iter().map(|t| default_data(&t.kind)).collect();
+        let input_bytes = f.encode_input(&dummy_inputs).unwrap();
+        let short_sig = &input_bytes[..4];
+
+        format!("{} {}", sig, hex::encode(short_sig))
+    }).collect();
+
+    for s in sigs {
+        if s.contains("17ab2412") || s.contains("843488fe") {
+            println!("{}", s);
+        }
+    }
+
+    panic!("Done");
+}
+
 #[test]
 fn test_revert_during_contract_deploy() {
     let (mut runner, mut signer, _) = initialize_transfer();
