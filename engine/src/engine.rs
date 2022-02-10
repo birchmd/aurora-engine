@@ -409,6 +409,7 @@ pub struct Engine<'env, I: IO, E: Env> {
     generation_cache: RefCell<BTreeMap<Address, u32>>,
     account_info_cache: RefCell<DupCache<Address, Basic>>,
     contract_storage_cache: RefCell<PairDupCache<Address, H256, H256>>,
+    original_storage_cache: RefCell<BTreeMap<(H160, H256), H256>>,
 }
 
 pub(crate) const CONFIG: &Config = &Config::london();
@@ -443,6 +444,7 @@ impl<'env, I: IO + Copy, E: Env> Engine<'env, I, E> {
             generation_cache: RefCell::new(BTreeMap::new()),
             account_info_cache: RefCell::new(DupCache::default()),
             contract_storage_cache: RefCell::new(PairDupCache::default()),
+            original_storage_cache: RefCell::new(BTreeMap::new()),
         }
     }
 
@@ -1465,7 +1467,12 @@ impl<'env, I: IO + Copy, E: Env> evm::backend::Backend for Engine<'env, I, E> {
     /// the "original storage" will always be the same as the storage because no values
     /// are written to storage until after the transaction is complete.
     fn original_storage(&self, address: H160, index: H256) -> Option<H256> {
-        Some(self.storage(address, index))
+        let result = *self
+            .original_storage_cache
+            .borrow_mut()
+            .entry((address, index))
+            .or_insert_with(|| self.storage(address, index));
+        Some(result)
     }
 }
 
