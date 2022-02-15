@@ -1585,6 +1585,7 @@ impl<'env, I: IO + Copy, E: Env> evm::backend::Backend for Engine<'env, I, E> {
     /// the "original storage" will always be the same as the storage because no values
     /// are written to storage until after the transaction is complete.
     fn original_storage(&self, address: H160, index: H256) -> Option<H256> {
+        //None
         Some(self.storage(address, index))
     }
 }

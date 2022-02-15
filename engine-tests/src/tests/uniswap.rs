@@ -289,6 +289,7 @@ impl UniswapTestContext {
         }
         let params = self.exact_input_params(amount_in, token_path);
         let swap_router = &self.swap_router;
+        println!("BEGIN SWAP -----------------------");
         let (result, profile) = self
             .runner
             .submit_with_signer_profiled(&mut self.signer, |nonce| {
@@ -296,6 +297,7 @@ impl UniswapTestContext {
             })
             .unwrap();
         assert!(result.status.is_ok(), "Swap failed");
+        println!("END SWAP ----------------------------");
 
         let evm_gas = result.gas_used;
         let amount_out = U256::from_big_endian(&test_utils::unwrap_success(result));

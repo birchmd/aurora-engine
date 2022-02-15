@@ -419,7 +419,7 @@ fn test_override_state() {
     let contract = contract.deployed_at(address);
 
     // define functions to interact with the contract
-    let get_address = |runner: &test_utils::AuroraRunner| {
+    let get_address = |runner: &mut test_utils::AuroraRunner| {
         let result = runner
             .view_call(test_utils::as_view_call(
                 contract.call_method_without_args("get", U256::zero()),
@@ -448,13 +448,23 @@ fn test_override_state() {
     };
 
     // Assert the initial state is 0
-    assert_eq!(get_address(&runner), Address::new(H160([0; 20])));
+    println!("GET --------------------");
+    assert_eq!(get_address(&mut runner), Address::new(H160([0; 20])));
+    println!("------------------------");
+    println!("POST --------------------");
     post_address(&mut runner, &mut account1);
+    println!("------------------------");
     // Assert the address matches the first caller
-    assert_eq!(get_address(&runner), account1_address);
+    println!("GET --------------------");
+    assert_eq!(get_address(&mut runner), account1_address);
+    println!("------------------------");
+    println!("POST --------------------");
     post_address(&mut runner, &mut account2);
+    println!("------------------------");
     // Assert the address matches the second caller
-    assert_eq!(get_address(&runner), account2_address);
+    println!("GET --------------------");
+    assert_eq!(get_address(&mut runner), account2_address);
+    println!("------------------------");
 }
 
 #[test]
@@ -716,9 +726,10 @@ fn test_eth_transfer_charging_gas_not_enough_balance() {
 }
 
 fn initialize_transfer() -> (test_utils::AuroraRunner, test_utils::Signer, Address) {
+    use rand::SeedableRng;
     // set up Aurora runner and accounts
     let mut runner = test_utils::deploy_evm();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(56817);
     let source_account = SecretKey::random(&mut rng);
     let source_address = test_utils::address_from_secret_key(&source_account);
     runner.create_address(source_address, INITIAL_BALANCE, INITIAL_NONCE.into());

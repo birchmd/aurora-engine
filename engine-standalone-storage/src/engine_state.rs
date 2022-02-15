@@ -76,6 +76,30 @@ impl<'db, 'input, 'output> EngineStateAccess<'db, 'input, 'output> {
         opt.set_iterate_lower_bound(lower_bound);
         opt
     }
+
+    fn internal_read_storage(&self, key: &[u8]) -> Option<EngineStorageValue<'db>> {
+        if let Some(diff) = self.transaction_diff.borrow().get(key) {
+            return diff
+                .value()
+                .map(|bytes| EngineStorageValue::Vec(bytes.to_vec()));
+        }
+
+        let opt = self.construct_engine_read(key);
+        let mut iter = self.db.iterator_opt(rocksdb::IteratorMode::End, opt);
+        let value = iter
+            .next()
+            .map(|(_, value)| DiffValue::try_from_bytes(&value).unwrap())?;
+        value.take_value().map(EngineStorageValue::Vec)
+    }
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut result = String::with_capacity(bytes.len());
+    for b in bytes {
+        let x = format!("{:#04x}", b);
+        result.extend(x.chars().skip(2))
+    }
+    result
 }
 
 impl<'db, 'input: 'db, 'output: 'db> IO for EngineStateAccess<'db, 'input, 'output> {
@@ -90,26 +114,17 @@ impl<'db, 'input: 'db, 'output: 'db> IO for EngineStateAccess<'db, 'input, 'outp
     }
 
     fn read_storage(&self, key: &[u8]) -> Option<Self::StorageValue> {
-        if let Some(diff) = self.transaction_diff.borrow().get(key) {
-            return diff
-                .value()
-                .map(|bytes| EngineStorageValue::Vec(bytes.to_vec()));
-        }
-
-        let opt = self.construct_engine_read(key);
-        let mut iter = self.db.iterator_opt(rocksdb::IteratorMode::End, opt);
-        let value = iter
-            .next()
-            .map(|(_, value)| DiffValue::try_from_bytes(&value).unwrap())?;
-        value.take_value().map(EngineStorageValue::Vec)
+        println!("READ {}", hex_encode(key));
+        self.internal_read_storage(key)
     }
 
     fn storage_has_key(&self, key: &[u8]) -> bool {
-        self.read_storage(key).is_some()
+        self.internal_read_storage(key).is_some()
     }
 
     fn write_storage(&mut self, key: &[u8], value: &[u8]) -> Option<Self::StorageValue> {
-        let original_value = self.read_storage(key);
+        println!("WRITE {} {}", hex_encode(key), hex_encode(value));
+        let original_value = self.internal_read_storage(key);
 
         self.transaction_diff
             .borrow_mut()
@@ -127,7 +142,7 @@ impl<'db, 'input: 'db, 'output: 'db> IO for EngineStateAccess<'db, 'input, 'outp
     }
 
     fn remove_storage(&mut self, key: &[u8]) -> Option<Self::StorageValue> {
-        let original_value = self.read_storage(key);
+        let original_value = self.internal_read_storage(key);
 
         self.transaction_diff.borrow_mut().delete(key.to_vec());
 

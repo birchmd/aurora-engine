@@ -1,5 +1,7 @@
 use aurora_engine::engine;
-use aurora_engine::parameters::{CallArgs, DeployErc20TokenArgs, SubmitResult, TransactionStatus};
+use aurora_engine::parameters::{
+    CallArgs, DeployErc20TokenArgs, SubmitResult, TransactionStatus, ViewCallArgs,
+};
 use aurora_engine_sdk::env::{self, Env};
 use aurora_engine_transactions::legacy::{LegacyEthSignedTransaction, TransactionLegacy};
 use aurora_engine_types::types::{Address, NearGas, Wei};
@@ -232,6 +234,28 @@ impl StandaloneRunner {
         } else {
             panic!("Unsupported standalone method {}", method_name);
         }
+    }
+
+    pub fn view_call(&self, args: ViewCallArgs) -> TransactionStatus {
+        let x = self
+            .storage
+            .with_engine_access(self.env.block_height + 10, 0, &[], |io| {
+                let current_account_id = "aurora".parse().unwrap();
+                // Set the env to be the same as `ViewEnv`
+                let env = {
+                    let mut tmp = self.env.clone();
+                    tmp.predecessor_account_id = "system".parse().unwrap();
+                    tmp.signer_account_id = tmp.predecessor_account_id.clone();
+                    tmp.attached_deposit = 1;
+                    tmp.prepaid_gas = NearGas::new(300);
+                    tmp
+                };
+                let engine =
+                    engine::Engine::new(args.sender, current_account_id, io, &env).unwrap();
+                engine.view_with_args(args).unwrap()
+            });
+
+        x.result
     }
 
     pub fn get_current_state(&self) -> &Diff {
