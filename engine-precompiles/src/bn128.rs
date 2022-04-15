@@ -95,6 +95,19 @@ impl<HF: HardFork> Bn128Add<HF> {
             output[32..64].copy_from_slice(&y);
         }
 
+        #[cfg(feature = "contract")]
+        {
+            let p1 = AffineG1::from_jacobian(p1).unwrap();
+            let p2 = AffineG1::from_jacobian(p2).unwrap();
+            let f = |x: bn::Fq| {
+                crate::prelude::U256(x.into_u256().0)
+            };
+            assert_eq!(aurora_engine_sdk::alt_bn128_g1_sum(
+                (f(p1.x()), f(p1.y())),
+                (f(p2.x()), f(p2.y())),
+            ), output);
+        }
+
         Ok(output.to_vec())
     }
 }

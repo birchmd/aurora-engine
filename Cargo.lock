@@ -1983,6 +1983,9 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+dependencies = [
+ "spin",
+]
 
 [[package]]
 name = "lazycell"
@@ -2299,7 +2302,7 @@ checksum = "0debeb9fcf88823ea64d64e4a815ab1643f33127d995978e099942ce38f25238"
 [[package]]
 name = "near-account-id"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 dependencies = [
  "borsh 0.9.1",
  "serde",
@@ -2327,7 +2330,7 @@ dependencies = [
 [[package]]
 name = "near-cache"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 dependencies = [
  "lru",
 ]
@@ -2351,7 +2354,7 @@ dependencies = [
 [[package]]
 name = "near-crypto"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 dependencies = [
  "arrayref",
  "blake2",
@@ -2449,7 +2452,7 @@ dependencies = [
 [[package]]
 name = "near-primitives"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 dependencies = [
  "borsh 0.9.1",
  "byteorder",
@@ -2463,6 +2466,7 @@ dependencies = [
  "near-rpc-error-macro 0.0.0",
  "near-vm-errors 0.0.0",
  "num-rational 0.3.2",
+ "once_cell",
  "primitive-types 0.10.1",
  "rand 0.7.3",
  "reed-solomon-erasure",
@@ -2534,7 +2538,7 @@ dependencies = [
 [[package]]
 name = "near-primitives-core"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 dependencies = [
  "base64 0.11.0",
  "borsh 0.9.1",
@@ -2544,6 +2548,7 @@ dependencies = [
  "num-rational 0.3.2",
  "serde",
  "sha2 0.9.5",
+ "strum",
 ]
 
 [[package]]
@@ -2584,7 +2589,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-error-core"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 dependencies = [
  "quote",
  "serde",
@@ -2616,7 +2621,7 @@ dependencies = [
 [[package]]
 name = "near-rpc-error-macro"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 dependencies = [
  "near-rpc-error-core 0.0.0",
  "serde",
@@ -2717,7 +2722,7 @@ dependencies = [
 [[package]]
 name = "near-stable-hasher"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 
 [[package]]
 name = "near-store"
@@ -2748,7 +2753,7 @@ dependencies = [
 [[package]]
 name = "near-vm-errors"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 dependencies = [
  "borsh 0.9.1",
  "near-account-id 0.0.0",
@@ -2782,7 +2787,7 @@ dependencies = [
 [[package]]
 name = "near-vm-logic"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 dependencies = [
  "base64 0.13.0",
  "borsh 0.9.1",
@@ -2796,7 +2801,8 @@ dependencies = [
  "ripemd160",
  "serde",
  "sha2 0.8.2",
- "sha3 0.9.1",
+ "sha3 0.8.2",
+ "zeropool-bn",
 ]
 
 [[package]]
@@ -2842,7 +2848,7 @@ dependencies = [
 [[package]]
 name = "near-vm-runner"
 version = "0.0.0"
-source = "git+https://github.com/near/nearcore.git?rev=83fc0f7d6b212bacc49f058e7400743de3e59783#83fc0f7d6b212bacc49f058e7400743de3e59783"
+source = "git+https://github.com/near/nearcore.git?rev=1ca2910e3df54f7a23c9bf011f57a114280045a5#1ca2910e3df54f7a23c9bf011f57a114280045a5"
 dependencies = [
  "borsh 0.9.1",
  "loupe",
@@ -4101,6 +4107,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "spin"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5301,4 +5313,18 @@ dependencies = [
  "quote",
  "syn",
  "synstructure",
+]
+
+[[package]]
+name = "zeropool-bn"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71e61de68ede9ffdd69c01664f65a178c5188b73f78faa21f0936016a888ff7c"
+dependencies = [
+ "borsh 0.9.1",
+ "byteorder",
+ "crunchy",
+ "lazy_static",
+ "rand 0.8.3",
+ "rustc-hex",
 ]

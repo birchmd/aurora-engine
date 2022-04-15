@@ -293,7 +293,7 @@ fn test_solidity_pure_bench() {
     let code = near_primitives_core::contract::ContractCode::new(contract_bytes, None);
     let mut context = runner.context.clone();
     context.input = loop_limit.to_le_bytes().to_vec();
-    let (outcome, error) = near_vm_runner::run(
+    let (outcome, error) = match near_vm_runner::run(
         &code,
         "cpu_ram_soak_test",
         &mut runner.ext,
@@ -303,7 +303,11 @@ fn test_solidity_pure_bench() {
         &[],
         runner.current_protocol_version,
         Some(&runner.cache),
-    );
+    )  {
+        near_vm_runner::VMResult::Aborted(outcome, error) => (Some(outcome), Some(error)),
+        near_vm_runner::VMResult::Ok(outcome) => (Some(outcome), None),
+        near_vm_runner::VMResult::NotRun(error) => (None, Some(error)),
+    };
     if let Some(e) = error {
         panic!("{:?}", e);
     }

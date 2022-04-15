@@ -2,7 +2,7 @@
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
 
 #[cfg(feature = "contract")]
-use crate::prelude::Address;
+use crate::prelude::{Address, U256, Vec};
 use crate::prelude::{H256, STORAGE_PRICE_PER_BYTE};
 pub use types::keccak;
 
@@ -69,6 +69,36 @@ pub fn ripemd160(input: &[u8]) -> [u8; 20] {
         let bytes = [0u8; 20];
         exports::read_register(REGISTER_ID, bytes.as_ptr() as u64);
         bytes
+    }
+}
+
+#[cfg(feature = "contract")]
+pub fn alt_bn128_g1_sum(g: (U256, U256), h: (U256, U256)) -> [u8; 64] {
+    const REGISTER_ID: u64 = 1;
+    let mut bytes = Vec::with_capacity(65 * 2);
+    
+    bytes.push(0); // positive sign
+    bytes.extend_from_slice(&[0; 64]);
+    g.0.to_little_endian(&mut bytes[1..33]);
+    g.1.to_little_endian(&mut bytes[33..65]);
+    
+    bytes.push(0);
+    bytes.extend_from_slice(&[0; 64]);
+    h.0.to_little_endian(&mut bytes[66..98]);
+    h.1.to_little_endian(&mut bytes[98..130]);
+
+    let value_ptr = bytes.as_ptr() as u64;
+    let value_len = bytes.len() as u64;
+
+    unsafe {
+        exports::alt_bn128_g1_sum(value_len, value_ptr, REGISTER_ID);
+        let mut output = [0u8; 64];
+        exports::read_register(REGISTER_ID, output.as_ptr() as u64);
+        let x = U256::from_little_endian(&output[0..32]);
+        let y = U256::from_little_endian(&output[32..64]);
+        x.to_big_endian(&mut output[0..32]);
+        y.to_big_endian(&mut output[32..64]);
+        return output;
     }
 }
 

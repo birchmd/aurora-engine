@@ -456,6 +456,7 @@ pub(crate) mod exports {
             malleability_flag: u64,
             register_id: u64,
         ) -> u64;
+        pub(crate) fn alt_bn128_g1_sum(value_len: u64, value_ptr: u64, register_id: u64);
         // #####################
         // # Miscellaneous API #
         // #####################
