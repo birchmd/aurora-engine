@@ -126,6 +126,30 @@ pub fn alt_bn128_g1_scalar_multiple(g: (U256, U256), k: U256) -> [u8; 64] {
     }
 }
 
+#[cfg(feature = "contract")]
+pub fn alt_bn128_pairing(pairs: &[((U256, U256), ((U256, U256), (U256, U256)))]) -> bool {
+    let n = pairs.len();
+    let mut bytes = Vec::with_capacity(n * 6 * 32);
+    let mut buf = [0u8; 6*32];
+
+    for ((x, y), ((xre, xim), (yre, yim))) in pairs {
+        x.to_little_endian(&mut buf[0..32]);
+        y.to_little_endian(&mut buf[32..64]);
+        xre.to_little_endian(&mut buf[64..96]);
+        xim.to_little_endian(&mut buf[96..128]);
+        yre.to_little_endian(&mut buf[128..160]);
+        yim.to_little_endian(&mut buf[160..192]);
+        bytes.extend_from_slice(&buf);
+    }
+
+    let value_ptr = bytes.as_ptr() as u64;
+    let value_len = bytes.len() as u64;
+
+    let result = unsafe { exports::alt_bn128_pairing_check(value_len, value_ptr) };
+
+    result == 1
+}
+
 /// Recover address from message hash and signature.
 #[cfg(feature = "contract")]
 pub fn ecrecover(hash: H256, signature: &[u8]) -> Result<Address, ECRecoverErr> {

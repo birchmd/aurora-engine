@@ -116,6 +116,17 @@ dependencies = [
 [[package]]
 name = "aurora-bn"
 version = "0.1.0"
+source = "git+https://github.com/birchmd/aurora-bn.git?rev=0ae7099d379e53d36f1883cf0d840edf67f71e7d#0ae7099d379e53d36f1883cf0d840edf67f71e7d"
+dependencies = [
+ "byteorder",
+ "getrandom 0.2.2",
+ "rand 0.8.3",
+ "serde",
+]
+
+[[package]]
+name = "aurora-bn"
+version = "0.1.0"
 source = "git+https://github.com/aurora-is-near/aurora-bn.git#8f1743884061981cac84388862e2763b2aa09307"
 dependencies = [
  "byteorder",
@@ -128,7 +139,7 @@ dependencies = [
 name = "aurora-engine"
 version = "2.1.0"
 dependencies = [
- "aurora-bn",
+ "aurora-bn 0.1.0 (git+https://github.com/aurora-is-near/aurora-bn.git)",
  "aurora-engine-precompiles",
  "aurora-engine-sdk",
  "aurora-engine-transactions",
@@ -159,7 +170,7 @@ dependencies = [
 name = "aurora-engine-precompiles"
 version = "1.0.0"
 dependencies = [
- "aurora-bn",
+ "aurora-bn 0.1.0 (git+https://github.com/birchmd/aurora-bn.git?rev=0ae7099d379e53d36f1883cf0d840edf67f71e7d)",
  "aurora-engine-sdk",
  "aurora-engine-types",
  "base64 0.13.0",

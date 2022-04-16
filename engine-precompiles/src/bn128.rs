@@ -361,9 +361,33 @@ impl<HF: HardFork> Bn128Pair<HF> {
                 vals.push((a, b))
             }
 
+            #[cfg(feature = "contract")]
+            let host = {
+                let u256s: Vec<_> = vals.iter().map(|(g1, g2)| {
+                    let f = |x: bn::Fq| {
+                        crate::prelude::U256(x.into_u256().0)
+                    };
+                    let p = AffineG1::from_jacobian(*g1).unwrap();
+                    let p2 = AffineG2::from_jacobian(*g2).unwrap();
+                    let p2x = p2.x();
+                    let p2y = p2.y();
+                    (
+                        (f(p.x()), f(p.y())),
+                        (
+                            (f(p2x.re()), f(p2x.im())),
+                            (f(p2y.re()), f(p2y.im())),
+                        )
+                    )
+                }).collect();
+                aurora_engine_sdk::alt_bn128_pairing(&u256s)
+            };
+
             let mul = vals
                 .into_iter()
                 .fold(Gt::one(), |s, (a, b)| s * bn::pairing(a, b));
+
+            #[cfg(feature = "contract")]
+            assert_eq!(host, mul == Gt::one());
 
             if mul == Gt::one() {
                 U256::one()
