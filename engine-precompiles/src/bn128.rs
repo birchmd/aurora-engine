@@ -200,6 +200,18 @@ impl<HF: HardFork> Bn128Mul<HF> {
             output[32..64].copy_from_slice(&y);
         }
 
+        #[cfg(feature = "contract")]
+        {
+            let p = AffineG1::from_jacobian(p).unwrap();
+            let f = |x: bn::Fq| {
+                crate::prelude::U256(x.into_u256().0)
+            };
+            assert_eq!(aurora_engine_sdk::alt_bn128_g1_scalar_multiple(
+                (f(p.x()), f(p.y())),
+                crate::prelude::U256(fr.into_u256().0),
+            ), output);
+        }
+
         Ok(output.to_vec())
     }
 }

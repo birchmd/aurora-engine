@@ -102,6 +102,30 @@ pub fn alt_bn128_g1_sum(g: (U256, U256), h: (U256, U256)) -> [u8; 64] {
     }
 }
 
+#[cfg(feature = "contract")]
+pub fn alt_bn128_g1_scalar_multiple(g: (U256, U256), k: U256) -> [u8; 64] {
+    const REGISTER_ID: u64 = 1;
+    let mut bytes = [0u8; 96];
+
+    g.0.to_little_endian(&mut bytes[0..32]);
+    g.1.to_little_endian(&mut bytes[32..64]);
+    k.to_little_endian(&mut bytes[64..96]);
+
+    let value_ptr = bytes.as_ptr() as u64;
+    let value_len = bytes.len() as u64;
+
+    unsafe {
+        exports::alt_bn128_g1_multiexp(value_len, value_ptr, REGISTER_ID);
+        let mut output = [0u8; 64];
+        exports::read_register(REGISTER_ID, output.as_ptr() as u64);
+        let x = U256::from_little_endian(&output[0..32]);
+        let y = U256::from_little_endian(&output[32..64]);
+        x.to_big_endian(&mut output[0..32]);
+        y.to_big_endian(&mut output[32..64]);
+        return output;
+    }
+}
+
 /// Recover address from message hash and signature.
 #[cfg(feature = "contract")]
 pub fn ecrecover(hash: H256, signature: &[u8]) -> Result<Address, ECRecoverErr> {
