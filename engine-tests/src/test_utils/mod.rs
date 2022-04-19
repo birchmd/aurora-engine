@@ -199,7 +199,7 @@ impl AuroraRunner {
             &[],
             self.current_protocol_version,
             Some(&self.cache),
-        )  {
+        ) {
             near_vm_runner::VMResult::Aborted(outcome, error) => (Some(outcome), Some(error)),
             near_vm_runner::VMResult::Ok(outcome) => (Some(outcome), None),
             near_vm_runner::VMResult::NotRun(error) => (None, Some(error)),

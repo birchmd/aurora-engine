@@ -2,7 +2,7 @@
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
 
 #[cfg(feature = "contract")]
-use crate::prelude::{Address, U256, Vec};
+use crate::prelude::{Address, Vec, U256};
 use crate::prelude::{H256, STORAGE_PRICE_PER_BYTE};
 pub use types::keccak;
 
@@ -76,12 +76,12 @@ pub fn ripemd160(input: &[u8]) -> [u8; 20] {
 pub fn alt_bn128_g1_sum(g: (U256, U256), h: (U256, U256)) -> [u8; 64] {
     const REGISTER_ID: u64 = 1;
     let mut bytes = Vec::with_capacity(65 * 2);
-    
+
     bytes.push(0); // positive sign
     bytes.extend_from_slice(&[0; 64]);
     g.0.to_little_endian(&mut bytes[1..33]);
     g.1.to_little_endian(&mut bytes[33..65]);
-    
+
     bytes.push(0);
     bytes.extend_from_slice(&[0; 64]);
     h.0.to_little_endian(&mut bytes[66..98]);
@@ -127,10 +127,13 @@ pub fn alt_bn128_g1_scalar_multiple(g: (U256, U256), k: U256) -> [u8; 64] {
 }
 
 #[cfg(feature = "contract")]
-pub fn alt_bn128_pairing(pairs: &[((U256, U256), ((U256, U256), (U256, U256)))]) -> bool {
+pub fn alt_bn128_pairing<I>(pairs: I) -> bool
+where
+    I: ExactSizeIterator<Item = ((U256, U256), ((U256, U256), (U256, U256)))>,
+{
     let n = pairs.len();
     let mut bytes = Vec::with_capacity(n * 6 * 32);
-    let mut buf = [0u8; 6*32];
+    let mut buf = [0u8; 6 * 32];
 
     for ((x, y), ((xre, xim), (yre, yim))) in pairs {
         x.to_little_endian(&mut buf[0..32]);

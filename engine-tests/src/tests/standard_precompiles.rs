@@ -20,20 +20,15 @@ fn standard_precompiles() {
 }
 
 #[test]
-#[ignore]
 fn ecpair() {
     let (mut runner, mut signer, contract) = initialize();
 
-    // TODO(#46): This should fit into 200 Tgas; we should not need to increase the limit like this.
-    runner.wasm_config.limit_config.max_gas_burnt = u64::MAX;
     let (_result, profile) = runner
         .submit_with_signer_profiled(&mut signer, |nonce| {
             contract.call_method("test_ecpair", nonce)
         })
         .unwrap();
 
-    // Some day this number should be less than 200 Tgas.
-    println!("{:?}", profile.all_gas());
     assert!(profile.all_gas() < 200_000_000_000_000);
 }
 

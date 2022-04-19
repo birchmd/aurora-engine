@@ -79,36 +79,41 @@ impl<HF: HardFork> Bn128Add<HF> {
 
 impl<HF: HardFork> Bn128Add<HF> {
     fn run_inner(input: &[u8], _context: &Context) -> Result<Vec<u8>, ExitError> {
-        use bn::AffineG1;
-
         let mut input = input.to_vec();
         input.resize(consts::ADD_INPUT_LEN, 0);
 
         let p1 = read_point(&input, 0)?;
         let p2 = read_point(&input, 64)?;
 
+        #[cfg(not(feature = "contract"))]
+        let output = Self::native_impl(p1, p2);
+
+        #[cfg(feature = "contract")]
+        let output = Self::near_impl(p1, p2);
+
+        Ok(output.to_vec())
+    }
+
+    #[cfg(not(feature = "contract"))]
+    fn native_impl(p1: bn::G1, p2: bn::G1) -> [u8; 64] {
         let mut output = [0u8; 64];
-        if let Some(sum) = AffineG1::from_jacobian(p1 + p2) {
+        if let Some(sum) = bn::AffineG1::from_jacobian(p1 + p2) {
             let x = sum.x().into_u256().to_big_endian();
             let y = sum.y().into_u256().to_big_endian();
             output[0..32].copy_from_slice(&x);
             output[32..64].copy_from_slice(&y);
         }
+        output
+    }
 
-        #[cfg(feature = "contract")]
-        {
-            let p1 = AffineG1::from_jacobian(p1).unwrap();
-            let p2 = AffineG1::from_jacobian(p2).unwrap();
-            let f = |x: bn::Fq| {
-                crate::prelude::U256(x.into_u256().0)
-            };
-            assert_eq!(aurora_engine_sdk::alt_bn128_g1_sum(
-                (f(p1.x()), f(p1.y())),
-                (f(p2.x()), f(p2.y())),
-            ), output);
-        }
-
-        Ok(output.to_vec())
+    #[cfg(feature = "contract")]
+    fn near_impl(p1: bn::G1, p2: bn::G1) -> [u8; 64] {
+        let p1 = bn::AffineG1::from_jacobian(p1).unwrap();
+        let p2 = bn::AffineG1::from_jacobian(p2).unwrap();
+        aurora_engine_sdk::alt_bn128_g1_sum(
+            (fq_to_u256(p1.x()), fq_to_u256(p1.y())),
+            (fq_to_u256(p2.x()), fq_to_u256(p2.y())),
+        )
     }
 }
 
@@ -181,8 +186,6 @@ impl<HF: HardFork> Bn128Mul<HF> {
 
 impl<HF: HardFork> Bn128Mul<HF> {
     fn run_inner(input: &[u8], _context: &Context) -> Result<Vec<u8>, ExitError> {
-        use bn::AffineG1;
-
         let mut input = input.to_vec();
         input.resize(consts::MUL_INPUT_LEN, 0);
 
@@ -192,27 +195,34 @@ impl<HF: HardFork> Bn128Mul<HF> {
         let fr = bn::Fr::interpret(&fr_buf)
             .map_err(|_e| ExitError::Other(Borrowed("ERR_BN128_INVALID_FE")))?;
 
+        #[cfg(not(feature = "contract"))]
+        let output = Self::native_impl(p, fr);
+
+        #[cfg(feature = "contract")]
+        let output = Self::near_impl(p, fr);
+
+        Ok(output.to_vec())
+    }
+
+    #[cfg(not(feature = "contract"))]
+    fn native_impl(p: bn::G1, fr: bn::Fr) -> [u8; 64] {
         let mut output = [0u8; 64];
-        if let Some(mul) = AffineG1::from_jacobian(p * fr) {
+        if let Some(mul) = bn::AffineG1::from_jacobian(p * fr) {
             let x = mul.x().into_u256().to_big_endian();
             let y = mul.y().into_u256().to_big_endian();
             output[0..32].copy_from_slice(&x);
             output[32..64].copy_from_slice(&y);
         }
+        output
+    }
 
-        #[cfg(feature = "contract")]
-        {
-            let p = AffineG1::from_jacobian(p).unwrap();
-            let f = |x: bn::Fq| {
-                crate::prelude::U256(x.into_u256().0)
-            };
-            assert_eq!(aurora_engine_sdk::alt_bn128_g1_scalar_multiple(
-                (f(p.x()), f(p.y())),
-                crate::prelude::U256(fr.into_u256().0),
-            ), output);
-        }
-
-        Ok(output.to_vec())
+    #[cfg(feature = "contract")]
+    fn near_impl(p: bn::G1, fr: bn::Fr) -> [u8; 64] {
+        let p = bn::AffineG1::from_jacobian(p).unwrap();
+        aurora_engine_sdk::alt_bn128_g1_scalar_multiple(
+            (fq_to_u256(p.x()), fq_to_u256(p.y())),
+            crate::prelude::U256(fr.into_u256().0),
+        )
     }
 }
 
@@ -284,7 +294,7 @@ impl<HF: HardFork> Bn128Pair<HF> {
 
 impl<HF: HardFork> Bn128Pair<HF> {
     fn run_inner(input: &[u8], _context: &Context) -> Result<Vec<u8>, ExitError> {
-        use bn::{arith::U256, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
+        use bn::{arith::U256, AffineG1, AffineG2, Fq, Fq2, Group, G1, G2};
 
         if input.len() % consts::PAIR_ELEMENT_LEN != 0 {
             return Err(ExitError::Other(Borrowed("ERR_BN128_INVALID_LEN")));
@@ -362,34 +372,12 @@ impl<HF: HardFork> Bn128Pair<HF> {
             }
 
             #[cfg(feature = "contract")]
-            let host = {
-                let u256s: Vec<_> = vals.iter().map(|(g1, g2)| {
-                    let f = |x: bn::Fq| {
-                        crate::prelude::U256(x.into_u256().0)
-                    };
-                    let p = AffineG1::from_jacobian(*g1).unwrap();
-                    let p2 = AffineG2::from_jacobian(*g2).unwrap();
-                    let p2x = p2.x();
-                    let p2y = p2.y();
-                    (
-                        (f(p.x()), f(p.y())),
-                        (
-                            (f(p2x.re()), f(p2x.im())),
-                            (f(p2y.re()), f(p2y.im())),
-                        )
-                    )
-                }).collect();
-                aurora_engine_sdk::alt_bn128_pairing(&u256s)
-            };
+            let result = Self::near_impl(vals);
 
-            let mul = vals
-                .into_iter()
-                .fold(Gt::one(), |s, (a, b)| s * bn::pairing(a, b));
+            #[cfg(not(feature = "contract"))]
+            let result = Self::native_impl(vals);
 
-            #[cfg(feature = "contract")]
-            assert_eq!(host, mul == Gt::one());
-
-            if mul == Gt::one() {
+            if result {
                 U256::one()
             } else {
                 U256::zero()
@@ -397,6 +385,33 @@ impl<HF: HardFork> Bn128Pair<HF> {
         };
 
         Ok(output.to_big_endian().to_vec())
+    }
+
+    #[cfg(not(feature = "contract"))]
+    fn native_impl(vals: Vec<(bn::G1, bn::G2)>) -> bool {
+        let mul = vals
+            .into_iter()
+            .fold(bn::Gt::one(), |s, (a, b)| s * bn::pairing(a, b));
+
+        mul == bn::Gt::one()
+    }
+
+    #[cfg(feature = "contract")]
+    fn near_impl(vals: Vec<(bn::G1, bn::G2)>) -> bool {
+        let u256s = vals.into_iter().map(|(g1, g2)| {
+            let p = bn::AffineG1::from_jacobian(g1).unwrap();
+            let p2 = bn::AffineG2::from_jacobian(g2).unwrap();
+            let p2x = p2.x();
+            let p2y = p2.y();
+            (
+                (fq_to_u256(p.x()), fq_to_u256(p.y())),
+                (
+                    (fq_to_u256(p2x.re()), fq_to_u256(p2x.im())),
+                    (fq_to_u256(p2y.re()), fq_to_u256(p2y.im())),
+                ),
+            )
+        });
+        aurora_engine_sdk::alt_bn128_pairing(u256s)
     }
 }
 
@@ -460,6 +475,10 @@ impl Precompile for Bn128Pair<Istanbul> {
         let output = Self::run_inner(input, context)?;
         Ok(PrecompileOutput::without_logs(cost, output).into())
     }
+}
+
+fn fq_to_u256(x: bn::Fq) -> crate::prelude::U256 {
+    crate::prelude::U256(x.into_u256().0)
 }
 
 #[cfg(test)]
