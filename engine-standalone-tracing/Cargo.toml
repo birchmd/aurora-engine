@@ -15,10 +15,10 @@ crate-type = ["lib"]
 
 [dependencies]
 aurora-engine-types = { path = "../engine-types", default-features = false, features = ["std"] }
-evm-core = { git = "https://github.com/aurora-is-near/sputnikvm.git", tag = "v0.37.2-aurora", default-features = false, features = ["std"] }
-evm = { git = "https://github.com/aurora-is-near/sputnikvm.git", tag = "v0.37.2-aurora", default-features = false, features = ["std", "tracing"] }
-evm-runtime = { git = "https://github.com/aurora-is-near/sputnikvm.git", tag = "v0.37.2-aurora", default-features = false, features = ["std", "tracing"] }
-evm-gasometer = { git = "https://github.com/aurora-is-near/sputnikvm.git", tag = "v0.37.2-aurora", default-features = false, features = ["std", "tracing"] }
+evm-core = { path = "/home/birchmd/upstream/aurora-is-near/sputnikvm/core", default-features = false, features = ["std"] }
+evm = { path = "/home/birchmd/upstream/aurora-is-near/sputnikvm", default-features = false, features = ["std", "tracing"] }
+evm-runtime = { path = "/home/birchmd/upstream/aurora-is-near/sputnikvm/runtime", default-features = false, features = ["std", "tracing"] }
+evm-gasometer = { path = "/home/birchmd/upstream/aurora-is-near/sputnikvm/gasometer", default-features = false, features = ["std", "tracing"] }
 hex = { version = "0.4", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"], optional = true }
 

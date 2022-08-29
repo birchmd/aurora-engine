@@ -140,7 +140,7 @@ dependencies = [
  "byte-slice-cast",
  "digest 0.10.5",
  "ethabi",
- "evm",
+ "evm 0.37.0",
  "hex",
  "rjson",
  "rlp",
@@ -160,7 +160,7 @@ dependencies = [
  "aurora-engine-types",
  "borsh",
  "ethabi",
- "evm",
+ "evm 0.37.0",
  "hex",
  "libsecp256k1",
  "num",
@@ -189,9 +189,9 @@ version = "1.0.0"
 dependencies = [
  "aurora-engine-sdk",
  "aurora-engine-types",
- "evm",
- "evm-gasometer",
- "evm-runtime",
+ "evm 0.37.0 (git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora)",
+ "evm-gasometer 0.37.0 (git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora)",
+ "evm-runtime 0.37.0 (git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora)",
 ]
 
 [[package]]
@@ -212,9 +212,9 @@ dependencies = [
  "engine-standalone-storage",
  "engine-standalone-tracing",
  "ethabi",
- "evm",
- "evm-gasometer",
- "evm-runtime",
+ "evm 0.37.0",
+ "evm-gasometer 0.37.0",
+ "evm-runtime 0.37.0",
  "git2",
  "hex",
  "libsecp256k1",
@@ -242,7 +242,7 @@ dependencies = [
  "aurora-engine-precompiles",
  "aurora-engine-sdk",
  "aurora-engine-types",
- "evm",
+ "evm 0.37.0",
  "hex",
  "rlp",
  "serde",
@@ -1160,7 +1160,7 @@ dependencies = [
  "aurora-engine-types",
  "base64",
  "borsh",
- "evm-core",
+ "evm-core 0.37.0",
  "hex",
  "postgres",
  "rocksdb",
@@ -1173,10 +1173,10 @@ name = "engine-standalone-tracing"
 version = "0.1.0"
 dependencies = [
  "aurora-engine-types",
- "evm",
- "evm-core",
- "evm-gasometer",
- "evm-runtime",
+ "evm 0.37.0",
+ "evm-core 0.37.0",
+ "evm-gasometer 0.37.0",
+ "evm-runtime 0.37.0",
  "hex",
  "serde",
 ]
@@ -1318,14 +1318,13 @@ dependencies = [
 [[package]]
 name = "evm"
 version = "0.37.0"
-source = "git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora#dc2add0078e06322b930c07eeabcc21a0c04cc35"
 dependencies = [
  "auto_impl",
  "environmental",
  "ethereum",
- "evm-core",
- "evm-gasometer",
- "evm-runtime",
+ "evm-core 0.37.0",
+ "evm-gasometer 0.37.0",
+ "evm-runtime 0.37.0",
  "log",
  "parity-scale-codec",
  "primitive-types 0.12.1",
@@ -1333,6 +1332,36 @@ dependencies = [
  "scale-info",
  "serde",
  "sha3",
+]
+
+[[package]]
+name = "evm"
+version = "0.37.0"
+source = "git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora#dc2add0078e06322b930c07eeabcc21a0c04cc35"
+dependencies = [
+ "auto_impl",
+ "environmental",
+ "ethereum",
+ "evm-core 0.37.0 (git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora)",
+ "evm-gasometer 0.37.0 (git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora)",
+ "evm-runtime 0.37.0 (git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora)",
+ "log",
+ "parity-scale-codec",
+ "primitive-types 0.12.1",
+ "rlp",
+ "scale-info",
+ "serde",
+ "sha3",
+]
+
+[[package]]
+name = "evm-core"
+version = "0.37.0"
+dependencies = [
+ "parity-scale-codec",
+ "primitive-types 0.12.1",
+ "scale-info",
+ "serde",
 ]
 
 [[package]]
@@ -1349,12 +1378,33 @@ dependencies = [
 [[package]]
 name = "evm-gasometer"
 version = "0.37.0"
+dependencies = [
+ "environmental",
+ "evm-core 0.37.0",
+ "evm-runtime 0.37.0",
+ "primitive-types 0.12.1",
+]
+
+[[package]]
+name = "evm-gasometer"
+version = "0.37.0"
 source = "git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora#dc2add0078e06322b930c07eeabcc21a0c04cc35"
 dependencies = [
  "environmental",
- "evm-core",
- "evm-runtime",
+ "evm-core 0.37.0 (git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora)",
+ "evm-runtime 0.37.0 (git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora)",
  "primitive-types 0.12.1",
+]
+
+[[package]]
+name = "evm-runtime"
+version = "0.37.0"
+dependencies = [
+ "auto_impl",
+ "environmental",
+ "evm-core 0.37.0",
+ "primitive-types 0.12.1",
+ "sha3",
 ]
 
 [[package]]
@@ -1364,7 +1414,7 @@ source = "git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora
 dependencies = [
  "auto_impl",
  "environmental",
- "evm-core",
+ "evm-core 0.37.0 (git+https://github.com/aurora-is-near/sputnikvm.git?tag=v0.37.2-aurora)",
  "primitive-types 0.12.1",
  "sha3",
 ]
