@@ -970,7 +970,7 @@ pub fn submit<I: IO + Copy, E: Env, P: PromiseHandler>(
             &receiver,
             transaction.value,
             transaction.data,
-            gas_limit,
+            core::cmp::min(gas_limit, 10_000_000),
             access_list,
             handler,
         )
