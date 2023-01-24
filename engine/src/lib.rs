@@ -31,11 +31,11 @@ pub mod pausables;
 mod prelude;
 pub mod xcc;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "contract"))]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "contract"))]
 #[panic_handler]
 #[cfg_attr(not(feature = "log"), allow(unused_variables))]
 #[no_mangle]
@@ -59,7 +59,7 @@ pub unsafe fn on_panic(info: &::core::panic::PanicInfo) -> ! {
     ::core::arch::wasm32::unreachable();
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "contract"))]
 #[alloc_error_handler]
 #[no_mangle]
 pub unsafe fn on_alloc_error(_: core::alloc::Layout) -> ! {
