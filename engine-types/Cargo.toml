@@ -24,4 +24,4 @@ rand = "0.8.5"
 [features]
 default = ["std"]
 std = ["borsh/std", "hex/std"]
-impl-serde = ["primitive-types/impl-serde", "serde"]
+impl-serde = ["serde"]
