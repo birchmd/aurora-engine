@@ -94,8 +94,11 @@ impl AsRef<[u8]> for EngineError {
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum EngineErrorKind {
+    // TODO: use `serde(serialize_with = "path")` instead
+    #[cfg_attr(feature = "serde", serde(skip_serializing))]
     /// Normal EVM errors.
     EvmError(ExitError),
+    #[cfg_attr(feature = "serde", serde(skip_serializing))]
     /// Fatal EVM errors.
     EvmFatal(ExitFatal),
     /// Incorrect nonce.
