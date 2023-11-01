@@ -20,7 +20,7 @@ pub const CODE_KEY: &[u8] = b"router_code";
 /// Gas costs estimated from simulation tests.
 pub const VERSION_UPDATE_GAS: NearGas = NearGas::new(5_000_000_000_000);
 pub const INITIALIZE_GAS: NearGas = NearGas::new(15_000_000_000_000);
-pub const UNWRAP_AND_REFUND_GAS: NearGas = NearGas::new(25_000_000_000_000);
+pub const UNWRAP_AND_REFUND_GAS: NearGas = NearGas::new(40_000_000_000_000);
 pub const WITHDRAW_GAS: NearGas = NearGas::new(40_000_000_000_000);
 /// Solidity selector for the `withdrawToNear` function
 /// `https://www.4byte.directory/signatures/?bytes4_signature=0x6b351848`

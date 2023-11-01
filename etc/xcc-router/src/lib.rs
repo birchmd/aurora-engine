@@ -22,7 +22,7 @@ enum StorageKey {
     Map,
 }
 
-const CURRENT_VERSION: u32 = 1;
+const CURRENT_VERSION: u32 = 2;
 
 const ERR_ILLEGAL_CALLER: &str = "ERR_ILLEGAL_CALLER";
 /// Gas cost estimated from mainnet data. Cost seems to consistently be 3 Tgas, but we add a
@@ -151,30 +151,69 @@ impl Router {
     /// NEAR back to its parent, if needed. This transfer is done because the parent
     /// must cover the storage staking cost with the router account is first created,
     /// but the user ultimately is responsible to pay for it.
+    ///
+    /// Gas required = EXECUTION + 3 * WNEAR_WITHDRAW_GAS + REFUND_GAS ~= 40 Tgas
     pub fn unwrap_and_refund_storage(&self, amount: U128, refund_needed: bool) {
         self.require_parent_caller();
 
-        let args = format!(r#"{{"amount": "{}"}}"#, amount.0);
-        let id = env::promise_create(
-            self.wnear_account.clone(),
-            "near_withdraw",
-            args.as_bytes(),
-            1,
-            WNEAR_WITHDRAW_GAS,
+        // `refund_needed` is used implicitly in the args to `check_withdraw` which come from
+        // `env::input`. This line is to make rustc happy.
+        let _ = refund_needed;
+        let id = self.call_near_withdraw(amount);
+        let final_id = env::promise_then(
+            id,
+            env::current_account_id(),
+            "check_withdraw",
+            // The args to `check_withdraw` are the same as the args for this function.
+            // The closure is unreachable because the input will have been checked by near-bindgen
+            // before reaching this point.
+            &env::input().unwrap_or_else(|| env::panic_str("UNREACHABLE")),
+            0,
+            WNEAR_WITHDRAW_GAS + WNEAR_WITHDRAW_GAS + REFUND_GAS,
         );
-        let final_id = if refund_needed {
-            env::promise_then(
-                id,
-                env::current_account_id(),
-                "send_refund",
-                &[],
-                0,
-                REFUND_GAS,
-            )
-        } else {
-            id
-        };
         env::promise_return(final_id);
+    }
+
+    #[private]
+    pub fn check_withdraw(&self, amount: U128, refund_needed: bool) {
+        let num_promises = env::promise_results_count();
+        if num_promises != 1 {
+            env::panic_str("ERR_EXPECTED_WITHDRAW_CALLBACK");
+        }
+        match env::promise_result(0) {
+            PromiseResult::Failed | PromiseResult::NotReady => {
+                // Call to `wrap.near:near_withdraw` failed.
+                // We assume it is because the `ft_transfer` receipt arrived
+                // after the `near_withdraw` receipt did. We assume that `ft_transfer`
+                // will have happened by now and try the `withdraw` again.
+                let id = self.call_near_withdraw(amount);
+                let final_id = if refund_needed {
+                    env::promise_then(
+                        id,
+                        env::current_account_id(),
+                        "send_refund",
+                        &[],
+                        0,
+                        REFUND_GAS,
+                    )
+                } else {
+                    id
+                };
+                env::promise_return(final_id);
+            }
+            PromiseResult::Successful(_) => {
+                if refund_needed {
+                    let id = env::promise_create(
+                        env::current_account_id(),
+                        "send_refund",
+                        &[],
+                        0,
+                        REFUND_GAS,
+                    );
+                    env::promise_return(id);
+                }
+            }
+        }
     }
 
     #[private]
@@ -206,6 +245,17 @@ impl Router {
                 env::panic_str("ERR_CALLBACK_OF_FAILED_PROMISE");
             }
         }
+    }
+
+    fn call_near_withdraw(&self, amount: U128) -> PromiseIndex {
+        let args = format!(r#"{{"amount": "{}"}}"#, amount.0);
+        env::promise_create(
+            self.wnear_account.clone(),
+            "near_withdraw",
+            args.as_bytes(),
+            1,
+            WNEAR_WITHDRAW_GAS,
+        )
     }
 
     fn promise_create(promise: PromiseArgs) -> PromiseIndex {
